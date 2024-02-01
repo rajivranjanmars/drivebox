@@ -64,14 +64,6 @@ export const columns: ColumnDef<FileType>[]=[
     {
         accessorKey:"delete",
         header:"Delete",
-        cell:({row,renderValue,...props})=>{
-           
-            return(
-                <button
-                className="text-red-500 hover:text-red-700">
-                   <Trash className="hover:animate-pulse"/>
-                </button>
-            )
-        }
+      
     }
 ]
