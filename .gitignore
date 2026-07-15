@@ -2,6 +2,7 @@
 
 # dependencies
 /node_modules
+/.bun
 /.pnp
 .pnp.js
 .yarn/install-state.gz
@@ -11,6 +12,9 @@
 
 # next.js
 /.next/     
+/.open-next/
+/.wrangler/
+/.playwright-cli/
 /out/
 
 # production
@@ -27,9 +31,15 @@ yarn-error.log*
 
 # local env files
 .env*.local
+.env
+.dev.vars
 # vercel
 .vercel
 
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+*.cpuprofile
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
