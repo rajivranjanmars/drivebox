@@ -1,0 +1,81 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "drivebox",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-07-15",
+  "compatibility_flags": [
+    "nodejs_compat",
+    "global_fetch_strictly_public"
+  ],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "drivebox-local",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "FILES",
+      "bucket_name": "drivebox-files-local"
+    }
+  ],
+  "vars": {
+    "NEXTJS_ENV": "development"
+  },
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1
+    },
+    "traces": {
+      "enabled": true,
+      "head_sampling_rate": 0.05
+    }
+  },
+  "env": {
+    "staging": {
+      "name": "drivebox-staging",
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "drivebox-staging",
+          "migrations_dir": "migrations"
+        }
+      ],
+      "r2_buckets": [
+        {
+          "binding": "FILES",
+          "bucket_name": "drivebox-files-staging"
+        }
+      ],
+      "vars": {
+        "NEXTJS_ENV": "production"
+      }
+    },
+    "production": {
+      "name": "drivebox-production",
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "drivebox-production",
+          "migrations_dir": "migrations"
+        }
+      ],
+      "r2_buckets": [
+        {
+          "binding": "FILES",
+          "bucket_name": "drivebox-files-production"
+        }
+      ],
+      "vars": {
+        "NEXTJS_ENV": "production"
+      }
+    }
+  }
+}

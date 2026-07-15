@@ -17,7 +17,7 @@
     "test:watch": "vitest",
     "db:generate": "drizzle-kit generate",
     "db:migrate:local": "wrangler d1 migrations apply drivebox-local --local",
-    "cf:typegen": "wrangler types --env-file .dev.vars.example --env-interface CloudflareEnv cloudflare-env.d.ts",
+    "cf:typegen": "wrangler types --env-file .dev.vars.example --env-interface CloudflareEnv cloudflare-env.d.ts && bun -e 'const path = \"cloudflare-env.d.ts\"; const source = await Bun.file(path).text(); await Bun.write(path, source.replace(/[ \\t]+$/gm, \"\"));'",
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
     "build:cloudflare": "opennextjs-cloudflare build",
     "deploy:staging": "opennextjs-cloudflare build && opennextjs-cloudflare deploy --env staging",
