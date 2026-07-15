@@ -1,103 +1,123 @@
-"use client"
+"use client";
 
 import {
-    ColumnDef,
-    flexRender,
-    getCoreRowModel,
-    useReactTable,
-} from "@tanstack/react-table"
+  type ColumnDef,
+  flexRender,
+  getCoreRowModel,
+  useReactTable,
+} from "@tanstack/react-table";
+import { Trash } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 
 import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from "@/components/ui/table"
-import { Trash } from "lucide-react"
-import { getStorage, ref, deleteObject } from "firebase/storage";
-import { useUser } from "@clerk/nextjs";
-import { doc, deleteDoc } from "firebase/firestore";
-import { db } from '@/firebase';
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import type { FileType } from "@/typings";
 
-interface DataTableProps<TData, TValue> {
-    columns: ColumnDef<TData, TValue>[]
-    data: TData[]
+interface DataTableProps {
+  columns: ColumnDef<FileType>[];
+  data: FileType[];
 }
 
-export function DataTable<TData, TValue>({
+/** Renders file metadata and handles authenticated deletion through the API. */
+export function DataTable({
     columns,
     data,
-}: DataTableProps<TData, TValue>) {
-    const table = useReactTable({
-        data,
-        columns,
-        getCoreRowModel: getCoreRowModel(),
-    })
+}: DataTableProps): React.JSX.Element {
+  const router = useRouter();
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  // TanStack Table intentionally exposes non-memoizable callbacks; React Compiler skips this hook.
+  // eslint-disable-next-line react-hooks/incompatible-library
+  const table = useReactTable({
+    data,
+    columns,
+    getCoreRowModel: getCoreRowModel(),
+  });
 
-    const storage = getStorage();
-    const { isLoaded, isSignedIn, user } = useUser()
-    
-    return (
-        <div className="rounded-md border my-5">
-            <Table>
-                <TableHeader>
-                    {table.getHeaderGroups().map((headerGroup) => (
-                        <TableRow key={headerGroup.id}>
-                            {headerGroup.headers.map((header) => {
-                                return (
-                                    <TableHead key={header.id}>
-                                        {header.isPlaceholder
-                                            ? null
-                                            : flexRender(
-                                                header.column.columnDef.header,
-                                                header.getContext()
-                                            )}
-                                    </TableHead>
-                                )
-                            })}
-                        </TableRow>
-                    ))}
-                </TableHeader>
-                <TableBody>
-                    {table.getRowModel().rows?.length ? (
-                        table.getRowModel().rows.map((row) => (
-                            <TableRow
-                                key={row.id}
-                                data-state={row.getIsSelected() && "selected"}
-                            >
-                                {row.getVisibleCells().map((cell: any) => (
-                                    <TableCell key={cell.id}>
-                                        
-                                        {cell.column.id === "delete" ? (<>
-                                            <button  onClick={async () => {
-                                               try {
-                                                   await deleteDoc(doc(db, `users/${user?.id}/files/${cell.row.original.id}`))
-                                                   deleteObject(ref(storage, `users/${user?.id}/files/${cell.row.original.id}`))
+  /** Deletes one owned file and refreshes server-rendered metadata. */
+  async function deleteFile(fileId: string): Promise<void> {
+    setDeletingId(fileId);
+    setError(null);
 
-                                               } catch (error) {
-                                                
-                                               } 
-                                            } }
-                                                className="text-red-500 hover:text-red-700">
-                                                <Trash className="hover:animate-pulse" />
-                                            </button>
-                                        </>) : (flexRender(cell.column.columnDef.cell, cell.getContext()))}
-                                       
-                                    </TableCell>
-                                ))}
-                            </TableRow>
-                        ))
+    try {
+      const response = await fetch(`/api/files/${fileId}`, { method: "DELETE" });
+      if (!response.ok) {
+        const payload = await response
+          .json()
+          .catch(() => ({ error: "Delete failed" })) as { error?: string };
+        throw new Error(payload.error || "Delete failed");
+      }
+      router.refresh();
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : "Delete failed");
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  return (
+    <div className="my-5 rounded-md border">
+      <Table>
+        <TableHeader>
+          {table.getHeaderGroups().map((headerGroup) => (
+            <TableRow key={headerGroup.id}>
+              {headerGroup.headers.map((header) => (
+                <TableHead key={header.id}>
+                  {header.isPlaceholder
+                    ? null
+                    : flexRender(header.column.columnDef.header, header.getContext())}
+                </TableHead>
+              ))}
+            </TableRow>
+          ))}
+        </TableHeader>
+        <TableBody>
+          {table.getRowModel().rows.length ? (
+            table.getRowModel().rows.map((row) => (
+              <TableRow
+                key={row.id}
+                data-state={row.getIsSelected() && "selected"}
+              >
+                {row.getVisibleCells().map((cell) => (
+                  <TableCell key={cell.id}>
+                    {cell.column.id === "delete" ? (
+                      <button
+                        type="button"
+                        aria-label={`Delete ${cell.row.original.filename}`}
+                        disabled={deletingId === cell.row.original.id}
+                        onClick={() => void deleteFile(cell.row.original.id)}
+                        className="text-red-500 hover:text-red-700 disabled:opacity-50"
+                      >
+                        <Trash className="hover:animate-pulse" />
+                      </button>
                     ) : (
-                        <TableRow>
-                            <TableCell colSpan={columns.length} className="h-24 text-center">
-                                You have no Files.
-                            </TableCell>
-                        </TableRow>
+                      flexRender(cell.column.columnDef.cell, cell.getContext())
                     )}
-                </TableBody>
-            </Table>
-        </div>
-    )
+                  </TableCell>
+                ))}
+              </TableRow>
+            ))
+          ) : (
+            <TableRow>
+              <TableCell colSpan={columns.length} className="h-24 text-center">
+                You have no files.
+              </TableCell>
+            </TableRow>
+          )}
+        </TableBody>
+      </Table>
+      {error && (
+        <p role="alert" className="px-4 pb-4 text-sm text-red-600">
+          {error}
+        </p>
+      )}
+    </div>
+  );
 }

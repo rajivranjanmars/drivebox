@@ -1,9 +1,8 @@
-"use client"
+"use client";
 
-import * as React from "react"
-import { ThemeProvider as NextThemesProvider } from "next-themes"
-import { type ThemeProviderProps } from "next-themes/dist/types"
+import { ThemeProvider as NextThemesProvider, type ThemeProviderProps } from "next-themes";
 
-export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
-    return <NextThemesProvider {...props}>{children}</NextThemesProvider>
+/** Provides light/dark theme state to the application. */
+export function ThemeProvider({ children, ...props }: ThemeProviderProps): React.JSX.Element {
+  return <NextThemesProvider {...props}>{children}</NextThemesProvider>;
 }
