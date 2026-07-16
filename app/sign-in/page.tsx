@@ -1,13 +1,9 @@
-import { Suspense } from "react";
-import { AuthForm } from "@/components/AuthForm";
+import type { Metadata } from "next";
+import { AuthPage } from "@/components/AuthPage";
 
-/** Renders the Better Auth sign-in page. */
+export const metadata: Metadata = { title: "Sign in" };
+
+/** Renders the Better Auth sign-in experience. */
 export default function SignInPage(): React.JSX.Element {
-  return (
-    <main className="flex min-h-[70vh] items-center justify-center p-6">
-      <Suspense fallback={<p>Loading…</p>}>
-        <AuthForm mode="sign-in" />
-      </Suspense>
-    </main>
-  );
+  return <AuthPage mode="sign-in" />;
 }

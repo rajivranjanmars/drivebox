@@ -7,8 +7,11 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "DriveBox",
-  description: "Private file storage powered by Cloudflare R2 and D1",
+  title: {
+    default: "DriveBox — Your private cloud workspace",
+    template: "%s · DriveBox",
+  },
+  description: "A fast, private file workspace powered by Cloudflare R2 and D1.",
 };
 
 /** Defines the shared document shell and theme for DriveBox. */
@@ -18,8 +21,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }): React.JSX.Element {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className={inter.className}>
+    <html lang="en" suppressHydrationWarning data-scroll-behavior="smooth">
+      <body className={`${inter.className} min-w-[320px]`}>
         <ThemeProvider
           attribute="class"
           defaultTheme="system"

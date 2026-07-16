@@ -1,15 +1,18 @@
 "use client";
 
+import { AlertCircle, ArrowRight, LoaderCircle, LockKeyhole, Mail, UserRound } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, type FormEvent } from "react";
+import { Button } from "@/components/ui/button";
 import { authClient } from "@/lib/auth-client";
 import { resolveAuthCallback } from "@/lib/navigation";
-import { Button } from "@/components/ui/button";
 
 interface AuthFormProps {
   mode: "sign-in" | "sign-up";
 }
+
+const inputClassName = "h-12 w-full rounded-xl border bg-background/70 pl-11 pr-3 text-sm shadow-sm transition placeholder:text-muted-foreground/65 hover:border-primary/30 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10";
 
 /** Renders the email/password form shared by sign-in and registration pages. */
 export function AuthForm({ mode }: AuthFormProps): React.JSX.Element {
@@ -46,71 +49,99 @@ export function AuthForm({ mode }: AuthFormProps): React.JSX.Element {
   }
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="w-full max-w-md space-y-5 rounded-lg border p-6 shadow-sm"
-    >
+    <form onSubmit={handleSubmit} className="space-y-5" aria-busy={isSubmitting}>
       <div>
-        <h1 className="text-2xl font-bold">{isSignUp ? "Create your account" : "Welcome back"}</h1>
-        <p className="mt-1 text-sm text-slate-500">
+        <p className="text-sm font-semibold text-primary">{isSignUp ? "Create an account" : "Sign in"}</p>
+        <h1 className="mt-2 text-3xl font-bold tracking-[-0.04em] sm:text-4xl">
+          {isSignUp ? "Build your workspace" : "Good to see you again"}
+        </h1>
+        <p className="mt-3 text-sm leading-6 text-muted-foreground">
           {isSignUp
-            ? "Start storing files privately in DriveBox."
-            : "Sign in to access your files."}
+            ? "Start organizing your files in a private workspace made for focus."
+            : "Enter your details to access your files securely."}
         </p>
       </div>
 
-      {isSignUp && (
+      <div className="space-y-4 pt-2">
+        {isSignUp && (
+          <label className="block space-y-2">
+            <span className="text-sm font-semibold">Name</span>
+            <span className="relative block">
+              <UserRound className="pointer-events-none absolute left-3.5 top-1/2 size-[18px] -translate-y-1/2 text-muted-foreground" />
+              <input
+                name="name"
+                required
+                autoComplete="name"
+                placeholder="Your name"
+                className={inputClassName}
+              />
+            </span>
+          </label>
+        )}
+
         <label className="block space-y-2">
-          <span className="text-sm font-medium">Name</span>
-          <input
-            name="name"
-            required
-            autoComplete="name"
-            className="w-full rounded-md border bg-transparent px-3 py-2"
-          />
+          <span className="text-sm font-semibold">Email address</span>
+          <span className="relative block">
+            <Mail className="pointer-events-none absolute left-3.5 top-1/2 size-[18px] -translate-y-1/2 text-muted-foreground" />
+            <input
+              name="email"
+              type="email"
+              required
+              autoComplete="email"
+              placeholder="you@example.com"
+              className={inputClassName}
+            />
+          </span>
         </label>
-      )}
 
-      <label className="block space-y-2">
-        <span className="text-sm font-medium">Email</span>
-        <input
-          name="email"
-          type="email"
-          required
-          autoComplete="email"
-          className="w-full rounded-md border bg-transparent px-3 py-2"
-        />
-      </label>
-
-      <label className="block space-y-2">
-        <span className="text-sm font-medium">Password</span>
-        <input
-          name="password"
-          type="password"
-          required
-          minLength={8}
-          autoComplete={isSignUp ? "new-password" : "current-password"}
-          className="w-full rounded-md border bg-transparent px-3 py-2"
-        />
-      </label>
+        <label className="block space-y-2">
+          <span className="flex items-center justify-between gap-3 text-sm font-semibold">
+            Password
+            {isSignUp && <span className="text-xs font-normal text-muted-foreground">8+ characters</span>}
+          </span>
+          <span className="relative block">
+            <LockKeyhole className="pointer-events-none absolute left-3.5 top-1/2 size-[18px] -translate-y-1/2 text-muted-foreground" />
+            <input
+              name="password"
+              type="password"
+              required
+              minLength={8}
+              autoComplete={isSignUp ? "new-password" : "current-password"}
+              placeholder="Enter your password"
+              className={inputClassName}
+            />
+          </span>
+        </label>
+      </div>
 
       {error && (
-        <p role="alert" className="text-sm text-red-600">
+        <p role="alert" className="flex items-start gap-2 rounded-xl border border-destructive/20 bg-destructive/[0.07] p-3 text-sm text-destructive">
+          <AlertCircle className="mt-0.5 size-4 shrink-0" />
           {error}
         </p>
       )}
 
-      <Button type="submit" disabled={isSubmitting} className="w-full">
-        {isSubmitting ? "Please wait…" : isSignUp ? "Create account" : "Sign in"}
+      <Button type="submit" disabled={isSubmitting} size="lg" className="w-full">
+        {isSubmitting ? (
+          <>
+            <LoaderCircle className="mr-2 size-4 animate-spin" />
+            {isSignUp ? "Creating workspace…" : "Signing in…"}
+          </>
+        ) : (
+          <>
+            {isSignUp ? "Create my workspace" : "Open my workspace"}
+            <ArrowRight className="ml-2 size-4" />
+          </>
+        )}
       </Button>
 
-      <p className="text-center text-sm text-slate-500">
-        {isSignUp ? "Already registered?" : "Need an account?"}{" "}
+      <p className="text-center text-sm text-muted-foreground">
+        {isSignUp ? "Already have a workspace?" : "New to DriveBox?"}{" "}
         <Link
-          className="text-blue-600 hover:underline"
+          className="font-semibold text-primary underline-offset-4 hover:underline"
           href={isSignUp ? "/sign-in" : "/sign-up"}
         >
-          {isSignUp ? "Sign in" : "Create one"}
+          {isSignUp ? "Sign in" : "Create an account"}
         </Link>
       </p>
     </form>
