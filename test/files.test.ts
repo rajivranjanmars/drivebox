@@ -13,6 +13,7 @@ import {
   parseUploadMetadata,
   UploadValidationError,
 } from "@/lib/files";
+import { filterAndSortFiles, getFileCategory } from "@/lib/file-presentation";
 
 const ownerId = "test-owner";
 const otherUserId = "test-other-user";
@@ -65,6 +66,26 @@ describe("upload metadata validation", (): void => {
   it("builds safe private object and download headers", (): void => {
     expect(buildObjectKey("user-1", "file-1")).toBe("users/user-1/files/file-1");
     expect(buildContentDisposition("résumé.txt")).toContain("filename*=UTF-8''r%C3%A9sum%C3%A9.txt");
+  });
+});
+
+describe("file presentation", (): void => {
+  it("classifies common files without a presentation dependency", (): void => {
+    expect(getFileCategory("image/png", "asset.bin")).toBe("image");
+    expect(getFileCategory("application/octet-stream", "archive.zip")).toBe("archive");
+    expect(getFileCategory("application/octet-stream", "source.ts")).toBe("code");
+    expect(getFileCategory("application/pdf", "brief.pdf")).toBe("document");
+  });
+
+  it("filters by name and sorts file metadata without mutating its input", (): void => {
+    const files = [
+      { id: "old", filename: "Project brief.pdf", timestamp: "2026-01-01T00:00:00.000Z", downloadURL: "/old", type: "application/pdf", size: 10 },
+      { id: "new", filename: "Project artwork.png", timestamp: "2026-02-01T00:00:00.000Z", downloadURL: "/new", type: "image/png", size: 20 },
+      { id: "other", filename: "Notes.txt", timestamp: "2026-03-01T00:00:00.000Z", downloadURL: "/other", type: "text/plain", size: 30 },
+    ];
+
+    expect(filterAndSortFiles(files, "project", "desc").map(({ id }) => id)).toEqual(["new", "old"]);
+    expect(files.map(({ id }) => id)).toEqual(["old", "new", "other"]);
   });
 });
 
