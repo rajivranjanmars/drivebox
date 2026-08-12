@@ -23,6 +23,7 @@
   ],
   "vars": {
     "APP_ENV": "production",
+    "BETTER_AUTH_URL": "https://drivebox.rajivranjanmars.workers.dev",
     "STORAGE_BACKEND": "r2"
   },
   "observability": {

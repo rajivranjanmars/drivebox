@@ -45,7 +45,7 @@ Use `bun run test`, not bare `bun test`; the script selects Vitest's Cloudflare 
 - D1 database: `drivebox`
 - R2 bucket: `drivebox-files`
 
-Before the first deployment, set `BETTER_AUTH_SECRET` and `BETTER_AUTH_URL` with `bunx wrangler secret put`, review and apply `migrations/`, then run `bun run deploy:dry-run`. Local development still uses isolated emulated bindings under `.wrangler/`; it does not write to production.
+Before the first deployment, set `BETTER_AUTH_SECRET` with `bunx wrangler secret put BETTER_AUTH_SECRET`, verify the public `BETTER_AUTH_URL` in `wrangler.jsonc`, review and apply `migrations/`, then run `bun run deploy:dry-run`. Local development still uses isolated emulated bindings under `.wrangler/`; it does not write to production.
 
 ## Object storage
 
