@@ -11,9 +11,8 @@
 /coverage
 /output/playwright/
 
-# next.js
-/.next/     
-/.open-next/
+# framework and Cloudflare build output
+/dist/
 /.wrangler/
 /.playwright-cli/
 /out/
@@ -39,7 +38,6 @@ yarn-error.log*
 
 # typescript
 *.tsbuildinfo
-next-env.d.ts
 *.cpuprofile
 *.sqlite
 *.sqlite-shm
