@@ -2,15 +2,19 @@
 
 # dependencies
 /node_modules
+/.bun
 /.pnp
 .pnp.js
 .yarn/install-state.gz
 
 # testing
 /coverage
+/output/playwright/
 
-# next.js
-/.next/     
+# framework and Cloudflare build output
+/dist/
+/.wrangler/
+/.playwright-cli/
 /out/
 
 # production
@@ -27,9 +31,14 @@ yarn-error.log*
 
 # local env files
 .env*.local
+.env
+.dev.vars
 # vercel
 .vercel
 
 # typescript
 *.tsbuildinfo
-next-env.d.ts
+*.cpuprofile
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
