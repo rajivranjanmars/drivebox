@@ -64,7 +64,7 @@ async function requireSuccess(response: Response, operation: string): Promise<Re
   throw new Error(`${operation} failed with S3 status ${response.status}${detail ? `: ${detail}` : ""}`);
 }
 
-/** Adapts any SigV4 S3-compatible endpoint to the object-storage port. */
+/** Connects file workflows to any SigV4 S3-compatible endpoint, including R2. */
 export function makeS3ObjectStorage(config: S3StorageConfig): ObjectStorage {
   const client = new AwsClient({
     accessKeyId: config.accessKeyId,
@@ -132,20 +132,6 @@ export function makeS3ObjectStorage(config: S3StorageConfig): ObjectStorage {
       const url = makeObjectUrl(config, key);
       url.searchParams.set("uploadId", uploadId);
       await requireSuccess(await client.fetch(url, { method: "DELETE" }), "AbortMultipartUpload");
-    },
-
-    async put(key, body, size, metadata) {
-      const url = makeObjectUrl(config, key);
-      const bytes = await new Response(body).arrayBuffer();
-      const response = await requireSuccess(await client.fetch(url, {
-        method: "PUT",
-        headers: {
-          "content-length": String(bytes.byteLength),
-          "content-type": metadata.contentType,
-        },
-        body: bytes,
-      }), "PutObject");
-      return { etag: response.headers.get("etag"), size };
     },
 
     async get(key) {

@@ -40,6 +40,7 @@ function RootDocument({ children }: { children: React.ReactNode }): React.JSX.El
     <html lang="en" suppressHydrationWarning>
       <head>
         <HeadContent />
+        {/* biome-ignore lint/security/noDangerouslySetInnerHtml: static theme bootstrap prevents a color-scheme flash */}
         <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
       </head>
       <body className="min-w-[320px]">

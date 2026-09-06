@@ -1,9 +1,8 @@
 APP_ENV=development
-BETTER_AUTH_SECRET=replace-with-at-least-32-random-characters
+BETTER_AUTH_SECRET=ExampleSecretKeyForBetterAuthExampleSecretKeyForBetterAuth
 BETTER_AUTH_URL=http://localhost:3000
-STORAGE_BACKEND=r2
 
-# Required only when STORAGE_BACKEND=s3. Keep real credentials in .dev.vars or Wrangler secrets.
+# Use a dedicated development bucket. R2 and other S3-compatible providers work here.
 S3_ENDPOINT=https://s3.us-east-1.amazonaws.com
 S3_REGION=us-east-1
 S3_BUCKET=replace-with-your-private-bucket

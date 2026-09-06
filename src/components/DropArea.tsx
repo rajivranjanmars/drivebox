@@ -43,6 +43,11 @@ interface BrowserFile extends File {
   webkitRelativePath: string;
 }
 
+interface DropAreaProps {
+  /** Folder the uploads should land in; defaults to the workspace root. */
+  readonly destinationPath?: string;
+}
+
 function getRelativePath(file: File): string {
   const browserFile = file as BrowserFile;
   const candidate = browserFile.webkitRelativePath || browserFile.path || file.name;
@@ -93,7 +98,7 @@ async function readApiError(response: Response, fallback: string): Promise<Error
 }
 
 /** Renders folder-aware, resumable multipart uploads with bounded automatic retries. */
-export default function DropArea(): React.JSX.Element {
+export default function DropArea({ destinationPath = "" }: DropAreaProps = {}): React.JSX.Element {
   const router = useRouter();
   const folderInputRef = useRef<HTMLInputElement>(null);
   const controllerRef = useRef<AbortController | null>(null);
@@ -112,7 +117,8 @@ export default function DropArea(): React.JSX.Element {
   }, [status]);
 
   async function uploadFile(file: File, current: number, total: number, signal: AbortSignal): Promise<void> {
-    const relativePath = getRelativePath(file);
+    const rawPath = getRelativePath(file);
+    const relativePath = destinationPath ? `${destinationPath}/${rawPath}` : rawPath;
     const startResponse = await reliableFetch("/api/uploads", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -180,7 +186,9 @@ export default function DropArea(): React.JSX.Element {
         await uploadFile(file, index + 1, selectedFiles.length, controller.signal);
       }
       setStatus({
-        message: `${selectedFiles.length} ${selectedFiles.length === 1 ? "file" : "files"} uploaded. Folder paths were preserved.`,
+        message: destinationPath
+          ? `${selectedFiles.length} ${selectedFiles.length === 1 ? "file" : "files"} uploaded to “${destinationPath}”.`
+          : `${selectedFiles.length} ${selectedFiles.length === 1 ? "file" : "files"} uploaded. Folder paths were preserved.`,
         tone: "success",
       });
       await router.invalidate();
@@ -268,6 +276,9 @@ export default function DropArea(): React.JSX.Element {
                       {isDragActive ? "Drop to upload securely" : "Drop files or folders here"}
                     </p>
                     <p className="mt-1.5 text-sm text-muted-foreground">
+                      {destinationPath
+                        ? <>Uploads land in <span className="font-medium text-foreground">{destinationPath}</span> · </> 
+                        : null}
                       Resumable chunk uploads · Folder structure preserved · Up to {prettyBytes(MAX_FILE_SIZE, { binary: true })}
                     </p>
                     <div className="relative mt-5 flex flex-wrap justify-center gap-2">

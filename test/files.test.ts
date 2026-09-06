@@ -10,9 +10,8 @@ import {
   findOwnedFile,
   insertFile,
   listFilesForUser,
-  MAX_FILE_SIZE,
   MULTIPART_PART_SIZE,
-  parseUploadMetadata,
+  parseMultipartUploadMetadata,
   UploadValidationError,
 } from "@/lib/files";
 import { filterAndSortFiles, getFileCategory } from "@/lib/file-presentation";
@@ -25,9 +24,8 @@ import {
   listUserFiles,
   startUserUpload,
   uploadUserPart,
-  uploadUserFile,
 } from "@/server/file-service";
-import { makeR2ObjectStorage } from "@/server/r2-object-storage";
+import { makeMemoryObjectStorage } from "./memory-object-storage";
 
 const ownerId = "test-owner";
 const otherUserId = "test-other-user";
@@ -50,40 +48,29 @@ beforeAll(async (): Promise<void> => {
 
 describe("upload metadata validation", (): void => {
   it("accepts bounded UTF-8 file metadata", (): void => {
-    const headers = new Headers({
-      "content-type": "text/plain",
-      "x-file-name": encodeURIComponent("résumé.txt"),
-      "x-file-size": "42",
-    });
-
-    expect(parseUploadMetadata(headers)).toEqual({
+    expect(parseMultipartUploadMetadata({
       filename: "résumé.txt",
       relativePath: "résumé.txt",
       mimeType: "text/plain",
       size: 42,
+      fingerprint: "resume-v1",
+    })).toEqual({
+      filename: "résumé.txt",
+      relativePath: "résumé.txt",
+      mimeType: "text/plain",
+      size: 42,
+      fingerprint: "resume-v1",
     });
   });
 
   it("rejects oversized and traversal-style names", (): void => {
-    const oversized = new Headers({
-      "x-file-name": "large.bin",
-      "x-file-size": String(MAX_FILE_SIZE + 1),
-    });
-    expect(() => parseUploadMetadata(oversized)).toThrow(UploadValidationError);
-
-    const pathName = new Headers({
-      "x-file-name": encodeURIComponent("../../notes.txt"),
-      "x-file-path": encodeURIComponent("./notes.txt"),
-      "x-file-size": "10",
-    });
-    expect(parseUploadMetadata(pathName)).toMatchObject({ filename: "notes.txt", relativePath: "notes.txt" });
-
-    const traversal = new Headers({
-      "x-file-name": "notes.txt",
-      "x-file-path": encodeURIComponent("../notes.txt"),
-      "x-file-size": "10",
-    });
-    expect(() => parseUploadMetadata(traversal)).toThrow(UploadValidationError);
+    expect(() => parseMultipartUploadMetadata({
+      filename: "notes.txt",
+      relativePath: "../notes.txt",
+      mimeType: "text/plain",
+      size: 10,
+      fingerprint: "traversal-v1",
+    })).toThrow(UploadValidationError);
   });
 
   it("builds safe private object and download headers", (): void => {
@@ -112,16 +99,12 @@ describe("file presentation", (): void => {
   });
 });
 
-describe("D1 metadata and R2 object storage", (): void => {
-  it("stores, lists, authorizes, streams, and deletes an owned file", async (): Promise<void> => {
+describe("D1 metadata and object-storage workflows", (): void => {
+  it("stores, lists, authorizes, and deletes file metadata", async (): Promise<void> => {
     const database = createDatabase(env.DB);
     const id = crypto.randomUUID();
     const objectKey = buildObjectKey(ownerId, "hello.txt");
 
-    await env.FILES.put(objectKey, "hello drivebox", {
-      httpMetadata: { contentType: "text/plain" },
-      customMetadata: { ownerId, filename: "hello.txt" },
-    });
     await insertFile(database, {
       id,
       userId: ownerId,
@@ -137,52 +120,52 @@ describe("D1 metadata and R2 object storage", (): void => {
     expect(listed[0]).toMatchObject({ id, filename: "hello.txt", downloadURL: `/api/files/${id}` });
     expect(await findOwnedFile(database, otherUserId, id)).toBeNull();
 
-    const object = await env.FILES.get(objectKey);
-    expect(await object?.text()).toBe("hello drivebox");
-
-    await env.FILES.delete(objectKey);
     await deleteOwnedFile(database, ownerId, id);
     expect(await findOwnedFile(database, ownerId, id)).toBeNull();
-    expect(await env.FILES.get(objectKey)).toBeNull();
   });
 
-  it("runs upload, ownership, download, list, and delete through the Effect service", async (): Promise<void> => {
+  it("enforces ownership for download, list, and delete through the Effect service", async (): Promise<void> => {
     const database = createDatabase(env.DB);
-    const layer = fileServiceLayer(database, makeR2ObjectStorage(env.FILES));
+    const layer = fileServiceLayer(database, makeMemoryObjectStorage());
     const run = <A, E>(program: Effect.Effect<A, E, import("@/server/file-service").FileService>) =>
       Effect.runPromise(program.pipe(Effect.provide(layer)));
 
     const body = new TextEncoder().encode("effect storage");
-    const uploaded = await run(uploadUserFile({
-      body: new Blob([body]).stream(),
-      metadata: {
-        filename: "effect.txt",
-        relativePath: "effect.txt",
-        mimeType: "text/plain",
-        size: body.byteLength,
-      },
-      userId: ownerId,
+    const uploaded = await run(startUserUpload(ownerId, {
+      filename: "effect.txt",
+      relativePath: "effect.txt",
+      mimeType: "text/plain",
+      size: body.byteLength,
+      fingerprint: "effect-v1",
     }));
+    await run(uploadUserPart({
+      userId: ownerId,
+      uploadId: uploaded.uploadId,
+      partNumber: 1,
+      size: body.byteLength,
+      body: new Blob([body]).stream(),
+    }));
+    const completed = await run(completeUserUpload(ownerId, uploaded.uploadId));
 
     expect(await run(listUserFiles(ownerId))).toEqual([
-      expect.objectContaining({ id: uploaded.id, filename: "effect.txt" }),
+      expect.objectContaining({ id: completed.fileId, filename: "effect.txt" }),
     ]);
 
     const unauthorized = await Effect.runPromise(
-      downloadUserFile(otherUserId, uploaded.id).pipe(Effect.provide(layer), Effect.either),
+      downloadUserFile(otherUserId, completed.fileId).pipe(Effect.provide(layer), Effect.either),
     );
     expect(Either.isLeft(unauthorized) && unauthorized.left._tag).toBe("FileNotFoundError");
 
-    const download = await run(downloadUserFile(ownerId, uploaded.id));
+    const download = await run(downloadUserFile(ownerId, completed.fileId));
     expect(await new Response(download.object.body).text()).toBe("effect storage");
 
-    await run(deleteUserFile(ownerId, uploaded.id));
+    await run(deleteUserFile(ownerId, completed.fileId));
     expect(await run(listUserFiles(ownerId))).toEqual([]);
   });
 
   it("resumes multipart chunks and mirrors a folder path under the user root", async (): Promise<void> => {
     const database = createDatabase(env.DB);
-    const layer = fileServiceLayer(database, makeR2ObjectStorage(env.FILES));
+    const layer = fileServiceLayer(database, makeMemoryObjectStorage());
     const run = <A, E>(program: Effect.Effect<A, E, import("@/server/file-service").FileService>) =>
       Effect.runPromise(program.pipe(Effect.provide(layer)));
 

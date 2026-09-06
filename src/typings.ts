@@ -7,3 +7,8 @@ export interface FileType {
   type: string;
   size: number;
 }
+
+export interface FolderType {
+  id: string;
+  path: string;
+}

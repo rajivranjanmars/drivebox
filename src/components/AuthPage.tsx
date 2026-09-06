@@ -61,7 +61,7 @@ export function AuthPage({ callbackURL, mode }: AuthPageProps): React.JSX.Elemen
               </span>
             </div>
             <Suspense
-              fallback={<div className="h-[390px] animate-pulse rounded-2xl bg-muted" aria-label="Loading authentication form" />}
+              fallback={<div className="h-[390px] animate-pulse rounded-2xl bg-muted" role="status" aria-label="Loading authentication form" />}
             >
               <AuthForm mode={mode} callbackURL={callbackURL} />
             </Suspense>

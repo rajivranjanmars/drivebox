@@ -2,45 +2,58 @@ import { Context, Data, Effect, Layer } from "effect";
 import type { Database } from "@/db";
 import {
   buildObjectKey,
+  deleteFolderSubtree,
   deleteOwnedFile,
   deleteUploadSession,
   deleteUploadSessionsForFile,
   findOwnedFile,
   findOwnedFileByPath,
+  findOwnedFolder,
   findOwnedUpload,
   findUploadByFingerprint,
+  insertFolderIgnoreConflict,
   insertUploadSession,
   listFilesForUser,
+  listFoldersForUser,
   listOtherUploadsForPath,
+  listOwnedFilesUnderPath,
   listUploadParts,
+  listUploadSessionsUnderPath,
   markUploadCompleted,
   MULTIPART_PART_SIZE,
   type MultipartUploadMetadata,
+  normalizeFolderPath,
   type StoredFile,
+  type StoredFolder,
   type StoredUploadPart,
   type StoredUploadSession,
-  type UploadMetadata,
   UploadValidationError,
   upsertFile,
   upsertUploadPart,
 } from "@/lib/files";
 import type { ObjectStorage, StoredObjectBody } from "@/server/object-storage";
-import type { FileType } from "@/typings";
+import type { FileType, FolderType } from "@/typings";
 
 export type FileStoreOperation =
   | "abort"
   | "complete"
   | "delete"
+  | "delete-folder"
   | "download"
   | "list"
+  | "list-folders"
+  | "new-folder"
   | "part"
   | "start"
-  | "status"
-  | "upload";
+  | "status";
 
 export class FileStoreError extends Data.TaggedError("FileStoreError")<{
   readonly operation: FileStoreOperation;
   readonly cause: unknown;
+}> {}
+
+export class FolderConflictError extends Data.TaggedError("FolderConflictError")<{
+  readonly reason: string;
 }> {}
 
 export class FileNotFoundError extends Error {
@@ -50,12 +63,6 @@ export class FileNotFoundError extends Error {
 export interface FileDownload {
   readonly object: StoredObjectBody;
   readonly record: StoredFile;
-}
-
-export interface UploadRequest {
-  readonly body: ReadableStream<Uint8Array>;
-  readonly metadata: UploadMetadata;
-  readonly userId: string;
 }
 
 export interface UploadPartRequest {
@@ -80,15 +87,23 @@ export interface FileServiceShape {
     userId: string,
     uploadId: string,
   ) => Effect.Effect<{ readonly fileId: string }, FileNotFoundError | UploadValidationError | FileStoreError>;
+  readonly createFolder: (
+    userId: string,
+    rawPath: string,
+  ) => Effect.Effect<FolderType, FolderConflictError | UploadValidationError | FileStoreError>;
   readonly delete: (userId: string, fileId: string) => Effect.Effect<void, FileNotFoundError | FileStoreError>;
+  readonly deleteFolder: (
+    userId: string,
+    rawPath: string,
+  ) => Effect.Effect<{ readonly deletedFiles: number }, FileNotFoundError | UploadValidationError | FileStoreError>;
   readonly download: (userId: string, fileId: string) => Effect.Effect<FileDownload, FileNotFoundError | FileStoreError>;
   readonly getUpload: (userId: string, uploadId: string) => Effect.Effect<UploadState, FileNotFoundError | FileStoreError>;
   readonly list: (userId: string) => Effect.Effect<FileType[], FileStoreError>;
+  readonly listFolders: (userId: string) => Effect.Effect<FolderType[], FileStoreError>;
   readonly startUpload: (
     userId: string,
     metadata: MultipartUploadMetadata,
   ) => Effect.Effect<UploadState, UploadValidationError | FileStoreError>;
-  readonly upload: (request: UploadRequest) => Effect.Effect<{ readonly id: string }, UploadValidationError | FileStoreError>;
   readonly uploadPart: (
     request: UploadPartRequest,
   ) => Effect.Effect<{ readonly etag: string; readonly partNumber: number }, FileNotFoundError | UploadValidationError | FileStoreError>;
@@ -116,6 +131,10 @@ function expectedPartSize(session: StoredUploadSession, partNumber: number): num
   return partNumber === partCount
     ? session.size - session.partSize * (partCount - 1)
     : session.partSize;
+}
+
+function toFolderType(record: StoredFolder): FolderType {
+  return { id: record.id, path: record.path };
 }
 
 async function abortQuietly(storage: ObjectStorage, key: string, uploadId: string): Promise<void> {
@@ -163,32 +182,6 @@ export function makeFileService(database: Database, storage: ObjectStorage): Fil
       });
       if (!object) return yield* Effect.fail(new FileNotFoundError());
       return { object, record };
-    }),
-
-    upload: (request) => Effect.gen(function* () {
-      const existing = yield* Effect.tryPromise({
-        try: () => findOwnedFileByPath(database, request.userId, request.metadata.relativePath),
-        catch: (cause) => new FileStoreError({ operation: "upload", cause }),
-      });
-      const id = existing?.id ?? crypto.randomUUID();
-      const objectKey = buildObjectKey(request.userId, request.metadata.relativePath);
-
-      const stored = yield* Effect.tryPromise({
-        try: () => storage.put(objectKey, request.body, request.metadata.size, {
-          contentType: request.metadata.mimeType,
-        }),
-        catch: (cause) => new FileStoreError({ operation: "upload", cause }),
-      });
-      if (stored.size !== null && stored.size !== request.metadata.size) {
-        yield* Effect.promise(() => deleteObjectQuietly(storage, objectKey));
-        return yield* Effect.fail(new UploadValidationError("The uploaded byte count did not match the declared size"));
-      }
-
-      yield* Effect.tryPromise({
-        try: () => upsertFile(database, { id, userId: request.userId, objectKey, ...request.metadata }),
-        catch: (cause) => new FileStoreError({ operation: "upload", cause }),
-      }).pipe(Effect.tapError(() => Effect.promise(() => deleteObjectQuietly(storage, objectKey))));
-      return { id };
     }),
 
     startUpload: (userId, metadata) => Effect.tryPromise({
@@ -371,6 +364,96 @@ export function makeFileService(database: Database, storage: ObjectStorage): Fil
         catch: (cause) => new FileStoreError({ operation: "delete", cause }),
       });
     }),
+
+    listFolders: (userId) => Effect.tryPromise({
+      try: () => listFoldersForUser(database, userId),
+      catch: (cause) => new FileStoreError({ operation: "list-folders", cause }),
+    }),
+
+    createFolder: (userId, rawPath) => Effect.gen(function* () {
+      const path = normalizeFolderPath(rawPath);
+      if (!path) return yield* Effect.fail(new UploadValidationError("The folder name is required"));
+
+      const existingFolder = yield* Effect.tryPromise({
+        try: () => findOwnedFolder(database, userId, path),
+        catch: (cause) => new FileStoreError({ operation: "new-folder", cause }),
+      });
+      if (existingFolder) {
+        return yield* Effect.fail(new FolderConflictError({ reason: "A folder with this name already exists" }));
+      }
+
+      // Files and folders share one namespace per user path.
+      const clashingFile = yield* Effect.tryPromise({
+        try: () => findOwnedFileByPath(database, userId, path),
+        catch: (cause) => new FileStoreError({ operation: "new-folder", cause }),
+      });
+      if (clashingFile) {
+        return yield* Effect.fail(new FolderConflictError({ reason: "A file with this name already exists" }));
+      }
+
+      const record: StoredFolder = {
+        id: crypto.randomUUID(),
+        userId,
+        path,
+        createdAt: new Date(),
+      };
+      yield* Effect.tryPromise({
+        try: () => insertFolderIgnoreConflict(database, record),
+        catch: (cause) => new FileStoreError({ operation: "new-folder", cause }),
+      });
+      return toFolderType(record);
+    }),
+
+    deleteFolder: (userId, rawPath) => Effect.gen(function* () {
+      const path = normalizeFolderPath(rawPath);
+      if (!path) return yield* Effect.fail(new FileNotFoundError());
+      const prefix = `${path}/`;
+
+      const [descendantFiles, descendantUploads] = yield* Effect.tryPromise({
+        try: () => Promise.all([
+          listOwnedFilesUnderPath(database, userId, prefix),
+          listUploadSessionsUnderPath(database, userId, prefix),
+        ]),
+        catch: (cause) => new FileStoreError({ operation: "delete-folder", cause }),
+      });
+
+      for (const upload of descendantUploads) {
+        if (upload.status === "active") {
+          yield* Effect.tryPromise({
+            try: () => abortQuietly(storage, upload.objectKey, upload.providerUploadId),
+            catch: (cause) => new FileStoreError({ operation: "delete-folder", cause }),
+          });
+        }
+      }
+      for (const file of descendantFiles) {
+        yield* Effect.tryPromise({
+          try: () => deleteObjectQuietly(storage, file.objectKey),
+          catch: (cause) => new FileStoreError({ operation: "delete-folder", cause }),
+        });
+      }
+
+      yield* Effect.tryPromise({
+        try: async () => {
+          for (const file of descendantFiles) {
+            await deleteOwnedFile(database, userId, file.id);
+            await deleteUploadSessionsForFile(database, userId, file.id);
+          }
+          await deleteFolderSubtree(database, userId, path);
+        },
+        catch: (cause) => new FileStoreError({ operation: "delete-folder", cause }),
+      });
+
+      const removedFolder = yield* Effect.tryPromise({
+        try: () => findOwnedFolder(database, userId, path),
+        catch: (cause) => new FileStoreError({ operation: "delete-folder", cause }),
+      });
+      // A visible folder must be either an explicit row or backed by stored
+      // files; otherwise it never existed for this user.
+      if (!removedFolder && descendantFiles.length === 0) {
+        return yield* Effect.fail(new FileNotFoundError());
+      }
+      return { deletedFiles: descendantFiles.length };
+    }),
   };
 }
 
@@ -381,14 +464,20 @@ export function fileServiceLayer(database: Database, storage: ObjectStorage): La
 export const listUserFiles = (userId: string): Effect.Effect<FileType[], FileStoreError, FileService> =>
   Effect.flatMap(FileService, (service) => service.list(userId));
 
-export const uploadUserFile = (request: UploadRequest) =>
-  Effect.flatMap(FileService, (service) => service.upload(request));
-
 export const downloadUserFile = (userId: string, fileId: string) =>
   Effect.flatMap(FileService, (service) => service.download(userId, fileId));
 
 export const deleteUserFile = (userId: string, fileId: string) =>
   Effect.flatMap(FileService, (service) => service.delete(userId, fileId));
+
+export const listUserFolders = (userId: string) =>
+  Effect.flatMap(FileService, (service) => service.listFolders(userId));
+
+export const createUserFolder = (userId: string, rawPath: string) =>
+  Effect.flatMap(FileService, (service) => service.createFolder(userId, rawPath));
+
+export const deleteUserFolder = (userId: string, rawPath: string) =>
+  Effect.flatMap(FileService, (service) => service.deleteFolder(userId, rawPath));
 
 export const startUserUpload = (userId: string, metadata: MultipartUploadMetadata) =>
   Effect.flatMap(FileService, (service) => service.startUpload(userId, metadata));

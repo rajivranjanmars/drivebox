@@ -181,7 +181,7 @@ function Home(): React.JSX.Element {
       <footer className="border-t border-border/60 py-7">
         <div className="page-shell flex flex-col items-center justify-between gap-3 text-center text-xs text-muted-foreground sm:flex-row sm:text-left">
           <BrandMark />
-          <p>Private storage powered by Cloudflare R2 and D1.</p>
+          <p>Private storage powered by S3-compatible object storage and D1.</p>
         </div>
       </footer>
     </main>

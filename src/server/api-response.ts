@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import { FileNotFoundError, FileStoreError } from "@/server/file-service";
+import { FileStoreError, FileNotFoundError, FolderConflictError } from "@/server/file-service";
 import { resolveSession, SessionLookupError } from "@/server/session";
 import { UploadValidationError } from "@/lib/files";
 
@@ -18,7 +18,8 @@ export async function withAuthenticatedUser(
     return await action(session.user.id);
   } catch (error) {
     if (error instanceof UploadValidationError) return json({ error: error.message }, 400);
-    if (error instanceof FileNotFoundError) return json({ error: "Upload not found" }, 404);
+    if (error instanceof FolderConflictError) return json({ error: error.reason }, 409);
+    if (error instanceof FileNotFoundError) return json({ error: "Not found" }, 404);
 
     const operation = error instanceof FileStoreError ? error.operation : "session";
     const cause = error instanceof FileStoreError || error instanceof SessionLookupError ? error.cause : error;
