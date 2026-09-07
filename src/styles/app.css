@@ -1,3 +1,4 @@
+/* biome-ignore-all lint/complexity/noImportantStyles: reduced-motion overrides must beat component animation utilities */
 @import "tailwindcss";
 @config "../../tailwind.config.ts";
 
@@ -98,22 +99,6 @@
     mask-image: linear-gradient(to bottom, black, transparent 85%);
   }
 
-  .loading-shimmer {
-    background: linear-gradient(
-      90deg,
-      hsl(var(--primary) / 0.25),
-      hsl(var(--primary) / 0.75),
-      hsl(var(--primary) / 0.25)
-    );
-    background-size: 200% 100%;
-    animation: shimmer 1.35s linear infinite;
-  }
-}
-
-@keyframes shimmer {
-  to {
-    background-position: -200% 0;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {

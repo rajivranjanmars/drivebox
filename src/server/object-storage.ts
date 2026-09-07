@@ -17,7 +17,7 @@ export interface StoredObjectBody {
   readonly size: number | null;
 }
 
-/** Minimal object-storage port implemented by R2 and generic S3 adapters. */
+/** The storage operations required by file workflows. */
 export interface ObjectStorage {
   readonly abortMultipart: (key: string, uploadId: string) => Promise<void>;
   readonly completeMultipart: (
@@ -28,12 +28,6 @@ export interface ObjectStorage {
   readonly createMultipart: (key: string, metadata: ObjectMetadata) => Promise<{ readonly uploadId: string }>;
   readonly delete: (key: string) => Promise<void>;
   readonly get: (key: string) => Promise<StoredObjectBody | null>;
-  readonly put: (
-    key: string,
-    body: ReadableStream<Uint8Array>,
-    size: number,
-    metadata: ObjectMetadata,
-  ) => Promise<{ readonly etag: string | null; readonly size: number | null }>;
   readonly uploadPart: (
     key: string,
     uploadId: string,

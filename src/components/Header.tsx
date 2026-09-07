@@ -67,7 +67,7 @@ export default function Header(): React.JSX.Element {
               </Button>
             </>
           ) : (
-            <span className="h-9 w-24 animate-pulse rounded-xl bg-muted" aria-label="Loading session" />
+            <span className="h-9 w-24 animate-pulse rounded-xl bg-muted" role="status" aria-label="Loading session" />
           )}
         </nav>
       </div>

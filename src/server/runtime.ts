@@ -3,20 +3,15 @@ import { env } from "cloudflare:workers";
 import { getDatabase } from "@/db";
 import { fileServiceLayer } from "@/server/file-service";
 import type { ObjectStorage } from "@/server/object-storage";
-import { makeR2ObjectStorage } from "@/server/r2-object-storage";
 import { makeS3ObjectStorage } from "@/server/s3-object-storage";
 
 function requireSetting(value: string | undefined, name: string): string {
-  if (!value?.trim()) throw new Error(`${name} is required when STORAGE_BACKEND=s3`);
+  if (!value?.trim()) throw new Error(`${name} must be configured`);
   return value.trim();
 }
 
-/** Selects a native R2 adapter or any SigV4 S3-compatible endpoint. */
+/** Creates storage for any SigV4 S3-compatible endpoint, including R2. */
 export function resolveObjectStorage(runtimeEnv: CloudflareEnv): ObjectStorage {
-  const backend = runtimeEnv.STORAGE_BACKEND?.trim().toLowerCase() || "r2";
-  if (backend === "r2") return makeR2ObjectStorage(runtimeEnv.FILES);
-  if (backend !== "s3") throw new Error(`Unsupported STORAGE_BACKEND: ${backend}`);
-
   const addressingStyle = runtimeEnv.S3_ADDRESSING_STYLE?.trim().toLowerCase() || "path";
   if (addressingStyle !== "path" && addressingStyle !== "virtual") {
     throw new Error("S3_ADDRESSING_STYLE must be path or virtual");

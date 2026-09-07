@@ -1,12 +1,10 @@
-import { and, asc, desc, eq, ne } from "drizzle-orm";
+import { and, asc, desc, eq, ne, or, sql, type AnyColumn, type SQL } from "drizzle-orm";
 import type { Database } from "@/db";
-import { files, uploadParts, uploadSessions } from "@/db/schema";
-import type { FileType } from "@/typings";
+import { files, folders, uploadParts, uploadSessions } from "@/db/schema";
+import type { FileType, FolderType } from "@/typings";
 
 export const MULTIPART_PART_SIZE = 8 * 1024 * 1024;
-export const MAX_UPLOAD_PARTS = 10_000;
 export const MAX_FILE_SIZE = 50 * 1024 * 1024 * 1024;
-export const MAX_DIRECT_UPLOAD_SIZE = 20 * 1024 * 1024;
 
 export interface UploadMetadata {
   readonly filename: string;
@@ -34,8 +32,15 @@ export interface NewUploadSession extends MultipartUploadMetadata {
 }
 
 export type StoredFile = typeof files.$inferSelect;
+export type StoredFolder = typeof folders.$inferSelect;
 export type StoredUploadSession = typeof uploadSessions.$inferSelect;
 export type StoredUploadPart = typeof uploadParts.$inferSelect;
+
+export interface NewFolderRecord {
+  readonly id: string;
+  readonly path: string;
+  readonly userId: string;
+}
 
 /** Represents invalid or unsafe upload input. */
 export class UploadValidationError extends Error {
@@ -82,6 +87,37 @@ export function normalizeRelativePath(value: unknown, filename: string): string 
   return segments.join("/");
 }
 
+/** Normalizes and validates a standalone folder path supplied by clients. */
+export function normalizeFolderPath(value: unknown): string {
+  if (typeof value !== "string") throw new UploadValidationError("The folder path is invalid");
+  const normalized = value
+    .trim()
+    .replaceAll("\\", "/")
+    .replace(/^\/+|\/+$/g, "")
+    .replace(/\/{2,}/g, "/")
+    .normalize("NFC");
+  if (!normalized) return "";
+  const segments = normalized.split("/");
+
+  if (
+    normalized.length > 1_024
+    || segments.some((segment) => !segment || segment === "." || segment === ".." || segment.length > 255 || hasControlCharacter(segment))
+  ) {
+    throw new UploadValidationError("The folder path is invalid");
+  }
+
+  return segments.join("/");
+}
+
+/** Sanitizes an untrusted directory parameter without throwing, for URLs. */
+export function sanitizeFolderPathParam(value: unknown): string {
+  try {
+    return normalizeFolderPath(value);
+  } catch {
+    return "";
+  }
+}
+
 function parseSize(value: unknown, maximum: number): number {
   const size = typeof value === "number" ? value : Number(value);
   if (!Number.isSafeInteger(size) || size <= 0 || size > maximum) {
@@ -97,32 +133,6 @@ function parseMimeType(value: unknown): string {
     throw new UploadValidationError("The file type is invalid");
   }
   return mimeType;
-}
-
-/** Parses and validates bounded metadata for the legacy single-request upload. */
-export function parseUploadMetadata(headers: Headers): UploadMetadata {
-  const encodedFilename = headers.get("x-file-name");
-  const declaredSize = headers.get("x-file-size");
-  if (!encodedFilename || !declaredSize) {
-    throw new UploadValidationError("File name and size are required");
-  }
-
-  let decodedFilename: string;
-  let decodedPath: string | null;
-  try {
-    decodedFilename = decodeURIComponent(encodedFilename);
-    decodedPath = headers.get("x-file-path") ? decodeURIComponent(headers.get("x-file-path")!) : null;
-  } catch {
-    throw new UploadValidationError("The file name or path is not valid UTF-8");
-  }
-
-  const filename = normalizeFilename(decodedFilename);
-  return {
-    filename,
-    relativePath: normalizeRelativePath(decodedPath, filename),
-    mimeType: parseMimeType(headers.get("content-type")),
-    size: parseSize(declaredSize, MAX_DIRECT_UPLOAD_SIZE),
-  };
 }
 
 /** Parses the JSON contract used to create or resume a multipart upload. */
@@ -307,4 +317,76 @@ export async function deleteUploadSessionsForFile(database: Database, userId: st
   await database
     .delete(uploadSessions)
     .where(and(eq(uploadSessions.userId, userId), eq(uploadSessions.fileId, fileId)));
+}
+
+/** Lists every explicit folder row for a user ordered by path. */
+export async function listFoldersForUser(database: Database, userId: string): Promise<FolderType[]> {
+  const records = await database
+    .select({ id: folders.id, path: folders.path })
+    .from(folders)
+    .where(eq(folders.userId, userId))
+    .orderBy(asc(folders.path));
+  return records;
+}
+
+export async function findOwnedFolder(
+  database: Database,
+  userId: string,
+  path: string,
+): Promise<StoredFolder | null> {
+  const [record] = await database
+    .select()
+    .from(folders)
+    .where(and(eq(folders.userId, userId), eq(folders.path, path)))
+    .limit(1);
+  return record ?? null;
+}
+
+/** Inserts folder metadata; existing rows at the same path are left untouched. */
+export async function insertFolderIgnoreConflict(database: Database, record: NewFolderRecord): Promise<void> {
+  await database.insert(folders).values(record).onConflictDoNothing({
+    target: [folders.userId, folders.path],
+  });
+}
+
+/** Escapes SQL LIKE wildcards so folder names match literally. */
+function escapeLikePattern(value: string): string {
+  return value.replace(/[\\%_]/g, (character) => `\\${character}`);
+}
+
+/** Builds an escaped LIKE condition matching every descendant of a path. */
+function matchesSubtree(column: AnyColumn, path: string): SQL {
+  return sql`${column} LIKE ${`${escapeLikePattern(path)}/%`} ESCAPE ${"\\"}`;
+}
+
+/** Lists every owned file stored inside a folder subtree (`path` excluded). */
+export async function listOwnedFilesUnderPath(
+  database: Database,
+  userId: string,
+  prefix: string,
+): Promise<StoredFile[]> {
+  return database
+    .select()
+    .from(files)
+    .where(and(eq(files.userId, userId), matchesSubtree(files.relativePath, prefix)));
+}
+
+/** Lists every active or completed upload session under a folder subtree. */
+export async function listUploadSessionsUnderPath(
+  database: Database,
+  userId: string,
+  prefix: string,
+): Promise<StoredUploadSession[]> {
+  return database
+    .select()
+    .from(uploadSessions)
+    .where(and(eq(uploadSessions.userId, userId), matchesSubtree(uploadSessions.relativePath, prefix)));
+}
+
+/** Removes explicit folder rows for a subtree, including the folder itself. */
+export async function deleteFolderSubtree(database: Database, userId: string, path: string): Promise<void> {
+  await database.delete(folders).where(and(
+    eq(folders.userId, userId),
+    or(eq(folders.path, path), matchesSubtree(folders.path, path)),
+  ));
 }

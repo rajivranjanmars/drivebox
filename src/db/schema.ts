@@ -155,6 +155,21 @@ export const uploadSessions = sqliteTable(
   ],
 );
 
+export const folders = sqliteTable(
+  "folders",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    path: text("path").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .default(nowInMilliseconds)
+      .notNull(),
+  },
+  (table) => [uniqueIndex("folders_user_path_unique").on(table.userId, table.path)],
+);
+
 export const uploadParts = sqliteTable(
   "upload_parts",
   {
@@ -175,6 +190,7 @@ export const userRelations = relations(user, ({ many }) => ({
   sessions: many(session),
   accounts: many(account),
   files: many(files),
+  folders: many(folders),
   uploadSessions: many(uploadSessions),
 }));
 
@@ -195,6 +211,13 @@ export const accountRelations = relations(account, ({ one }) => ({
 export const filesRelations = relations(files, ({ one }) => ({
   user: one(user, {
     fields: [files.userId],
+    references: [user.id],
+  }),
+}));
+
+export const foldersRelations = relations(folders, ({ one }) => ({
+  user: one(user, {
+    fields: [folders.userId],
     references: [user.id],
   }),
 }));
@@ -221,12 +244,14 @@ export const schema = {
   verification,
   rateLimit,
   files,
+  folders,
   uploadSessions,
   uploadParts,
   userRelations,
   sessionRelations,
   accountRelations,
   filesRelations,
+  foldersRelations,
   uploadSessionsRelations,
   uploadPartsRelations,
 };
