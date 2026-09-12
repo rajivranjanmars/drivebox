@@ -1,12 +1,64 @@
+# DriveBox local Worker environment
+#
+# Copy this file to `.dev.vars` and replace every `replace-*` value:
+#   cp .dev.vars.example .dev.vars
+#
+# `.dev.vars` is ignored by Git. Never commit real passwords, access keys, or
+# bootstrap tokens. D1 is supplied by the `DB` binding in `wrangler.jsonc`, so
+# it does not need a variable here.
+
+# -----------------------------------------------------------------------------
+# Application and Better Auth
+# -----------------------------------------------------------------------------
+
+# Use `development` locally. Production is configured in `wrangler.jsonc`.
 APP_ENV=development
-BETTER_AUTH_SECRET=ExampleSecretKeyForBetterAuthExampleSecretKeyForBetterAuth
+
+# Public origin used by Better Auth to construct callbacks and cookies.
+# Keep this aligned with the local Vite/Worker address and do not add a path.
 BETTER_AUTH_URL=http://localhost:3000
 
-# Use a dedicated development bucket. R2 and other S3-compatible providers work here.
-S3_ENDPOINT=https://s3.us-east-1.amazonaws.com
-S3_REGION=us-east-1
-S3_BUCKET=replace-with-your-private-bucket
+# Required secret with at least 32 characters. Generate a unique local value,
+# for example: openssl rand -base64 48
+BETTER_AUTH_SECRET=replace-with-at-least-32-random-characters
+
+# -----------------------------------------------------------------------------
+# Initial superadmin bootstrap
+# -----------------------------------------------------------------------------
+
+# One-time secret accepted only while no superadmin profile exists. Generate it
+# independently from BETTER_AUTH_SECRET; do not reuse either value.
+SUPERADMIN_BOOTSTRAP_TOKEN=replace-with-another-32-character-random-token
+
+# Only this normalized email may use the bootstrap token. It is also the
+# explicitly verified operator allowed to claim a legacy installation.
+SUPERADMIN_BOOTSTRAP_EMAIL=operator@example.com
+
+# -----------------------------------------------------------------------------
+# Object storage — Cloudflare R2 through its S3-compatible API only
+# -----------------------------------------------------------------------------
+
+# Use the DEVELOPMENT Cloudflare account here. Production uses the separate
+# endpoint and bucket in `wrangler.jsonc`, plus separate Wrangler secrets.
+# Replace the account ID with the development account ID shown in Cloudflare.
+# Do not include the bucket name or a trailing slash in this endpoint.
+S3_ENDPOINT=https://replace-with-development-account-id.r2.cloudflarestorage.com
+
+# Cloudflare R2's SigV4 signing region is always `auto`.
+S3_REGION=auto
+
+# Existing private bucket in the development account. The production account
+# can use the same name because R2 bucket namespaces are account-scoped.
+S3_BUCKET=drivebox-files
+
+# `path` produces `<endpoint>/<bucket>/<key>` and is the default/recommended R2
+# form. `virtual` produces `https://<bucket>.<endpoint-host>/<key>`.
 S3_ADDRESSING_STYLE=path
-S3_ACCESS_KEY_ID=replace-me
-S3_SECRET_ACCESS_KEY=replace-me
+
+# Create an object read/write credential scoped to this bucket. For R2, use an
+# R2 API token's Access Key ID and Secret Access Key—not a Cloudflare API token.
+S3_ACCESS_KEY_ID=replace-with-s3-access-key-id
+S3_SECRET_ACCESS_KEY=replace-with-s3-secret-access-key
+
+# R2 account API-token credentials do not need a session token. Keep it empty.
 S3_SESSION_TOKEN=

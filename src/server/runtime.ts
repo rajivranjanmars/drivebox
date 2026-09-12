@@ -10,7 +10,7 @@ function requireSetting(value: string | undefined, name: string): string {
   return value.trim();
 }
 
-/** Creates storage for any SigV4 S3-compatible endpoint, including R2. */
+/** Creates object storage from the sole configured S3-compatible backend. */
 export function resolveObjectStorage(runtimeEnv: CloudflareEnv): ObjectStorage {
   const addressingStyle = runtimeEnv.S3_ADDRESSING_STYLE?.trim().toLowerCase() || "path";
   if (addressingStyle !== "path" && addressingStyle !== "virtual") {

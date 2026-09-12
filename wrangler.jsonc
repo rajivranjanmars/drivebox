@@ -2,7 +2,8 @@
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "drivebox",
   "main": "src/server.ts",
-  "compatibility_date": "2026-08-12",
+  "account_id": "09b2aa433c6f1bb3d7539b4c7063a524",
+  "compatibility_date": "2026-08-18",
   "compatibility_flags": [
     "nodejs_compat",
     "global_fetch_strictly_public"
@@ -18,7 +19,9 @@
   "vars": {
     "APP_ENV": "production",
     "BETTER_AUTH_URL": "https://drivebox.rajivranjanmars.workers.dev",
-    "S3_ENDPOINT": "https://replace-with-account-id.r2.cloudflarestorage.com",
+    // Cloudflare R2 is accessed only through its S3-compatible API. This must
+    // identify the separate production account; development lives in .dev.vars.
+    "S3_ENDPOINT": "https://09b2aa433c6f1bb3d7539b4c7063a524.r2.cloudflarestorage.com",
     "S3_REGION": "auto",
     "S3_BUCKET": "drivebox-files",
     "S3_ADDRESSING_STYLE": "path"

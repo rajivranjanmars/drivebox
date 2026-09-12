@@ -58,13 +58,32 @@ function makeObjectUrl(config: S3StorageConfig, key: string): URL {
   return endpoint;
 }
 
+async function readBoundedText(response: Response, maximumBytes: number): Promise<string> {
+  if (!response.body) return "";
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let bytesRead = 0;
+  let text = "";
+  while (bytesRead < maximumBytes) {
+    const { done, value } = await reader.read();
+    if (done) return text + decoder.decode();
+    const remaining = maximumBytes - bytesRead;
+    const chunk = value.byteLength > remaining ? value.subarray(0, remaining) : value;
+    bytesRead += chunk.byteLength;
+    text += decoder.decode(chunk, { stream: true });
+    if (chunk.byteLength < value.byteLength) break;
+  }
+  await reader.cancel();
+  return text + decoder.decode();
+}
+
 async function requireSuccess(response: Response, operation: string): Promise<Response> {
   if (response.ok) return response;
-  const detail = (await response.text()).slice(0, 2_000);
+  const detail = await readBoundedText(response, 2_000);
   throw new Error(`${operation} failed with S3 status ${response.status}${detail ? `: ${detail}` : ""}`);
 }
 
-/** Connects file workflows to any SigV4 S3-compatible endpoint, including R2. */
+/** Connects file workflows to a SigV4 S3-compatible endpoint. */
 export function makeS3ObjectStorage(config: S3StorageConfig): ObjectStorage {
   const client = new AwsClient({
     accessKeyId: config.accessKeyId,
@@ -84,7 +103,7 @@ export function makeS3ObjectStorage(config: S3StorageConfig): ObjectStorage {
         method: "POST",
         headers: { "content-type": metadata.contentType },
       }), "CreateMultipartUpload");
-      const xml = await response.text();
+      const xml = await readBoundedText(response, 65_536);
       const uploadId = readXmlTag(xml, "UploadId");
       if (!uploadId) throw new Error("CreateMultipartUpload returned no UploadId");
       return { uploadId };
@@ -95,7 +114,7 @@ export function makeS3ObjectStorage(config: S3StorageConfig): ObjectStorage {
       url.searchParams.set("partNumber", String(partNumber));
       url.searchParams.set("uploadId", uploadId);
 
-      // Parts are intentionally bounded, so buffering makes SigV4 retries replay-safe.
+      // Parts are bounded at 8 MiB, so buffering makes SigV4 retries replay-safe.
       const bytes = await new Response(body).arrayBuffer();
       if (bytes.byteLength !== size) throw new Error(`UploadPart received ${bytes.byteLength} bytes instead of ${size}`);
       const response = await requireSuccess(await client.fetch(url, {
@@ -120,11 +139,9 @@ export function makeS3ObjectStorage(config: S3StorageConfig): ObjectStorage {
         headers: { "content-type": "application/xml" },
         body,
       }), "CompleteMultipartUpload");
-      const xml = await response.text();
+      const xml = await readBoundedText(response, 65_536);
       const embeddedError = readXmlTag(xml, "Code");
-      if (xml.includes("<Error>") && embeddedError) {
-        throw new Error(`CompleteMultipartUpload failed: ${embeddedError}`);
-      }
+      if (xml.includes("<Error>") && embeddedError) throw new Error(`CompleteMultipartUpload failed: ${embeddedError}`);
       return { etag: readXmlTag(xml, "ETag"), size: null };
     },
 
