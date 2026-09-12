@@ -10,9 +10,13 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ClaimSuperadminRouteImport } from './routes/claim-superadmin'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as SignInRouteImport } from './routes/sign-in'
 import { Route as SignUpRouteImport } from './routes/sign-up'
+import { Route as ApiBootstrapRouteImport } from './routes/api/bootstrap'
+import { Route as ApiFoldersRouteImport } from './routes/api/folders'
+import { Route as ApiGovernanceRouteImport } from './routes/api/governance'
 import { Route as ApiUploadsRouteImport } from './routes/api/uploads'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiFilesIdRouteImport } from './routes/api/files/$id'
@@ -22,6 +26,11 @@ import { Route as ApiUploadsUploadIdPartsPartNumberRouteImport } from './routes/
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ClaimSuperadminRoute = ClaimSuperadminRouteImport.update({
+  id: '/claim-superadmin',
+  path: '/claim-superadmin',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DashboardRoute = DashboardRouteImport.update({
@@ -37,6 +46,21 @@ const SignInRoute = SignInRouteImport.update({
 const SignUpRoute = SignUpRouteImport.update({
   id: '/sign-up',
   path: '/sign-up',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiBootstrapRoute = ApiBootstrapRouteImport.update({
+  id: '/api/bootstrap',
+  path: '/api/bootstrap',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiFoldersRoute = ApiFoldersRouteImport.update({
+  id: '/api/folders',
+  path: '/api/folders',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiGovernanceRoute = ApiGovernanceRouteImport.update({
+  id: '/api/governance',
+  path: '/api/governance',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiUploadsRoute = ApiUploadsRouteImport.update({
@@ -68,9 +92,13 @@ const ApiUploadsUploadIdPartsPartNumberRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/claim-superadmin': typeof ClaimSuperadminRoute
   '/dashboard': typeof DashboardRoute
   '/sign-in': typeof SignInRoute
   '/sign-up': typeof SignUpRoute
+  '/api/bootstrap': typeof ApiBootstrapRoute
+  '/api/folders': typeof ApiFoldersRoute
+  '/api/governance': typeof ApiGovernanceRoute
   '/api/uploads': typeof ApiUploadsRouteWithChildren
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/files/$id': typeof ApiFilesIdRoute
@@ -79,9 +107,13 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/claim-superadmin': typeof ClaimSuperadminRoute
   '/dashboard': typeof DashboardRoute
   '/sign-in': typeof SignInRoute
   '/sign-up': typeof SignUpRoute
+  '/api/bootstrap': typeof ApiBootstrapRoute
+  '/api/folders': typeof ApiFoldersRoute
+  '/api/governance': typeof ApiGovernanceRoute
   '/api/uploads': typeof ApiUploadsRouteWithChildren
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/files/$id': typeof ApiFilesIdRoute
@@ -91,9 +123,13 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/claim-superadmin': typeof ClaimSuperadminRoute
   '/dashboard': typeof DashboardRoute
   '/sign-in': typeof SignInRoute
   '/sign-up': typeof SignUpRoute
+  '/api/bootstrap': typeof ApiBootstrapRoute
+  '/api/folders': typeof ApiFoldersRoute
+  '/api/governance': typeof ApiGovernanceRoute
   '/api/uploads': typeof ApiUploadsRouteWithChildren
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/files/$id': typeof ApiFilesIdRoute
@@ -104,9 +140,13 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/claim-superadmin'
     | '/dashboard'
     | '/sign-in'
     | '/sign-up'
+    | '/api/bootstrap'
+    | '/api/folders'
+    | '/api/governance'
     | '/api/uploads'
     | '/api/auth/$'
     | '/api/files/$id'
@@ -115,9 +155,13 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/claim-superadmin'
     | '/dashboard'
     | '/sign-in'
     | '/sign-up'
+    | '/api/bootstrap'
+    | '/api/folders'
+    | '/api/governance'
     | '/api/uploads'
     | '/api/auth/$'
     | '/api/files/$id'
@@ -126,9 +170,13 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/claim-superadmin'
     | '/dashboard'
     | '/sign-in'
     | '/sign-up'
+    | '/api/bootstrap'
+    | '/api/folders'
+    | '/api/governance'
     | '/api/uploads'
     | '/api/auth/$'
     | '/api/files/$id'
@@ -138,9 +186,13 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ClaimSuperadminRoute: typeof ClaimSuperadminRoute
   DashboardRoute: typeof DashboardRoute
   SignInRoute: typeof SignInRoute
   SignUpRoute: typeof SignUpRoute
+  ApiBootstrapRoute: typeof ApiBootstrapRoute
+  ApiFoldersRoute: typeof ApiFoldersRoute
+  ApiGovernanceRoute: typeof ApiGovernanceRoute
   ApiUploadsRoute: typeof ApiUploadsRouteWithChildren
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiFilesIdRoute: typeof ApiFilesIdRoute
@@ -153,6 +205,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/claim-superadmin': {
+      id: '/claim-superadmin'
+      path: '/claim-superadmin'
+      fullPath: '/claim-superadmin'
+      preLoaderRoute: typeof ClaimSuperadminRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dashboard': {
@@ -174,6 +233,27 @@ declare module '@tanstack/react-router' {
       path: '/sign-up'
       fullPath: '/sign-up'
       preLoaderRoute: typeof SignUpRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/bootstrap': {
+      id: '/api/bootstrap'
+      path: '/api/bootstrap'
+      fullPath: '/api/bootstrap'
+      preLoaderRoute: typeof ApiBootstrapRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/folders': {
+      id: '/api/folders'
+      path: '/api/folders'
+      fullPath: '/api/folders'
+      preLoaderRoute: typeof ApiFoldersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/governance': {
+      id: '/api/governance'
+      path: '/api/governance'
+      fullPath: '/api/governance'
+      preLoaderRoute: typeof ApiGovernanceRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/uploads': {
@@ -240,9 +320,13 @@ const ApiUploadsRouteWithChildren = ApiUploadsRoute._addFileChildren(
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ClaimSuperadminRoute: ClaimSuperadminRoute,
   DashboardRoute: DashboardRoute,
   SignInRoute: SignInRoute,
   SignUpRoute: SignUpRoute,
+  ApiBootstrapRoute: ApiBootstrapRoute,
+  ApiFoldersRoute: ApiFoldersRoute,
+  ApiGovernanceRoute: ApiGovernanceRoute,
   ApiUploadsRoute: ApiUploadsRouteWithChildren,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiFilesIdRoute: ApiFilesIdRoute,

@@ -29,6 +29,7 @@ export const Route = createRootRoute({
 function RootComponent(): React.JSX.Element {
   return (
     <ThemeProvider defaultTheme="system">
+      <a href="#main-content" className="sr-only z-[100] rounded-md bg-background p-3 focus:not-sr-only focus:fixed focus:left-3 focus:top-3">Skip to main content</a>
       <Header />
       <Outlet />
     </ThemeProvider>

@@ -1,4 +1,4 @@
-import { ArrowUpRight, LayoutDashboard, LogOut } from "lucide-react";
+import { ArrowUpRight, LayoutDashboard, LogOut, Search } from "lucide-react";
 import { Link, useRouter, useRouterState } from "@tanstack/react-router";
 import { authClient } from "@/lib/auth-client";
 import { BrandMark } from "./BrandMark";
@@ -9,6 +9,7 @@ import { Button } from "./ui/button";
 export default function Header(): React.JSX.Element {
   const router = useRouter();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const dashboardSearch = useRouterState({ select: (state) => state.location.search as { dir?: string; owner?: string; q?: string; view?: string } });
   const { data: session, isPending } = authClient.useSession();
   const isDashboard = pathname.startsWith("/dashboard");
 
@@ -21,10 +22,24 @@ export default function Header(): React.JSX.Element {
 
   return (
     <header className="sticky top-0 z-40 border-b border-border/60 bg-background/75 backdrop-blur-xl">
-      <div className="page-shell flex h-16 items-center justify-between gap-3">
+      <div className="mx-auto flex h-16 w-full max-w-[1600px] items-center justify-between gap-3 px-4 sm:px-6">
         <Link to="/" aria-label="DriveBox home" className="rounded-xl">
           <BrandMark />
         </Link>
+
+        {isDashboard && (
+          <label className="relative min-w-0 flex-1 md:max-w-2xl">
+            <span className="sr-only">Search DriveBox</span>
+            <Search className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="search"
+              value={dashboardSearch.q ?? ""}
+              onChange={(event) => { void router.navigate({ to: "/dashboard", search: { dir: dashboardSearch.dir ?? "", owner: dashboardSearch.owner, q: event.target.value || undefined, view: "drive" }, replace: true }); }}
+              placeholder="Search in DriveBox"
+              className="h-11 w-full rounded-full border-0 bg-muted pl-11 pr-4 text-sm outline-none focus:bg-background focus:ring-2 focus:ring-primary/30 sm:h-12 sm:pl-12"
+            />
+          </label>
+        )}
 
         <nav aria-label="Primary navigation" className="flex items-center gap-1 sm:gap-2">
           <ModeToggle />
@@ -32,7 +47,7 @@ export default function Header(): React.JSX.Element {
             <>
               {!isDashboard && (
                 <Button asChild variant="ghost" className="hidden sm:inline-flex">
-                  <Link to="/dashboard">
+                  <Link to="/dashboard" search={{ dir: "", view: "drive" }}>
                     <LayoutDashboard className="mr-2 size-4" />
                     Dashboard
                   </Link>
@@ -61,7 +76,7 @@ export default function Header(): React.JSX.Element {
               </Button>
               <Button asChild size="sm">
                 <Link to="/sign-up">
-                  Get started
+                  Activate account
                   <ArrowUpRight className="ml-1.5 size-4" />
                 </Link>
               </Button>

@@ -1,4 +1,4 @@
-import { ChevronRight, Files, Folder, HardDrive } from "lucide-react";
+import { Bell, ChevronRight, Files, Folder, Gauge, HardDrive, ShieldCheck, Users } from "lucide-react";
 import prettyBytes from "pretty-bytes";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -14,6 +14,11 @@ interface WorkspaceSidebarProps {
   totalSize: number;
   fileCount: number;
   onNavigate: (path: string) => void;
+  activeView: "drive" | "overview" | "people" | "approvals" | "notifications";
+  isAdmin: boolean;
+  notificationCount: number;
+  pendingApprovalCount: number;
+  onViewChange: (view: WorkspaceSidebarProps["activeView"]) => void;
 }
 
 interface FolderTreeProps {
@@ -24,7 +29,7 @@ interface FolderTreeProps {
   onNavigate: (path: string) => void;
 }
 
-interface TreeNodeProps extends FolderTreeProps {
+interface TreeNodeProps extends Omit<FolderTreeProps, "nodes"> {
   node: FolderTreeNode;
   depth: number;
 }
@@ -75,7 +80,7 @@ function TreeNode({ node, depth, activePath, expandedPaths, onToggle, onNavigate
         </button>
       </div>
       {hasChildren && isExpanded && (
-        <ul role="list">
+        <ul>
           {node.children.map((child) => (
             <TreeNode
               key={child.path}
@@ -100,6 +105,11 @@ export default function WorkspaceSidebar({
   totalSize,
   fileCount,
   onNavigate,
+  activeView,
+  isAdmin,
+  notificationCount,
+  pendingApprovalCount,
+  onViewChange,
 }: WorkspaceSidebarProps): React.JSX.Element {
   const tree = useMemo(() => buildFolderTree(folderPaths), [folderPaths]);
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(() => new Set());
@@ -136,23 +146,33 @@ export default function WorkspaceSidebar({
       <nav aria-label="Workspace folders" className="surface rounded-2xl p-3">
         <button
           type="button"
-          onClick={() => onNavigate("")}
-          aria-current={activePath === "" ? "page" : undefined}
+          onClick={() => { onViewChange("drive"); onNavigate(""); }}
+          aria-current={activeView === "drive" && activePath === "" ? "page" : undefined}
           className={cn(
             "flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm transition",
-            activePath === "" ? "bg-primary/[0.08] font-semibold text-primary" : "hover:bg-muted",
+            activeView === "drive" && activePath === "" ? "bg-primary/[0.08] font-semibold text-primary" : "hover:bg-muted",
           )}
         >
           <HardDrive className="size-4 shrink-0" aria-hidden="true" />
           My Files
         </button>
 
+        {isAdmin && (
+          <>
+            <p className="mb-1 mt-4 px-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Administration</p>
+            <SidebarViewButton icon={<Gauge />} label="Overview" active={activeView === "overview"} onClick={() => onViewChange("overview")} />
+            <SidebarViewButton icon={<Users />} label="People" active={activeView === "people"} onClick={() => onViewChange("people")} />
+            <SidebarViewButton icon={<ShieldCheck />} label="Approvals" count={pendingApprovalCount} active={activeView === "approvals"} onClick={() => onViewChange("approvals")} />
+          </>
+        )}
+        <SidebarViewButton icon={<Bell />} label="Notifications" count={notificationCount} active={activeView === "notifications"} onClick={() => onViewChange("notifications")} />
+
         {tree.length > 0 && (
           <>
             <p className="mb-1 mt-4 px-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
               Folders
             </p>
-            <ul role="list">
+            <ul>
               {tree.map((node) => (
                 <TreeNode
                   key={node.path}
@@ -186,4 +206,8 @@ export default function WorkspaceSidebar({
       </section>
     </aside>
   );
+}
+
+function SidebarViewButton({ icon, label, active, count, onClick }: { icon: React.ReactNode; label: string; active: boolean; count?: number; onClick: () => void }): React.JSX.Element {
+  return <button type="button" onClick={onClick} aria-current={active ? "page" : undefined} className={cn("flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm transition", active ? "bg-primary/[0.08] font-semibold text-primary" : "hover:bg-muted")}><span className="[&>svg]:size-4">{icon}</span><span className="flex-1 text-left">{label}</span>{Boolean(count) && <span className="rounded-full bg-primary px-1.5 text-[11px] text-primary-foreground">{count}</span>}</button>;
 }

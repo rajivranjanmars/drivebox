@@ -28,10 +28,14 @@ export function AuthForm({ callbackURL: requestedCallbackURL, mode }: AuthFormPr
     const email = String(formData.get("email") ?? "");
     const password = String(formData.get("password") ?? "");
     const name = String(formData.get("name") ?? "");
+    const enrollmentToken = String(formData.get("enrollmentToken") ?? "").trim();
     const callbackURL = resolveAuthCallback(requestedCallbackURL ?? null);
 
     const result = isSignUp
-      ? await authClient.signUp.email({ email, password, name })
+      ? await authClient.signUp.email(
+          { email, password, name },
+          { headers: { "x-drivebox-enrollment": enrollmentToken } },
+        )
       : await authClient.signIn.email({ email, password });
 
     if (result.error) {
@@ -52,26 +56,44 @@ export function AuthForm({ callbackURL: requestedCallbackURL, mode }: AuthFormPr
         </h1>
         <p className="mt-3 text-sm leading-6 text-muted-foreground">
           {isSignUp
-            ? "Start organizing your files in a private workspace made for focus."
+            ? "Activate the private workspace approved for you by an administrator."
             : "Enter your details to access your files securely."}
         </p>
       </div>
 
       <div className="space-y-4 pt-2">
         {isSignUp && (
-          <label className="block space-y-2">
-            <span className="text-sm font-semibold">Name</span>
-            <span className="relative block">
-              <UserRound className="pointer-events-none absolute left-3.5 top-1/2 size-[18px] -translate-y-1/2 text-muted-foreground" />
-              <input
-                name="name"
-                required
-                autoComplete="name"
-                placeholder="Your name"
-                className={inputClassName}
-              />
-            </span>
-          </label>
+          <>
+            <label className="block space-y-2">
+              <span className="text-sm font-semibold">Name</span>
+              <span className="relative block">
+                <UserRound className="pointer-events-none absolute left-3.5 top-1/2 size-[18px] -translate-y-1/2 text-muted-foreground" />
+                <input
+                  name="name"
+                  required
+                  autoComplete="name"
+                  placeholder="Your name"
+                  className={inputClassName}
+                />
+              </span>
+            </label>
+            <label className="block space-y-2">
+              <span className="text-sm font-semibold">Activation code</span>
+              <span className="relative block">
+                <LockKeyhole className="pointer-events-none absolute left-3.5 top-1/2 size-[18px] -translate-y-1/2 text-muted-foreground" />
+                <input
+                  name="enrollmentToken"
+                  required
+                  autoComplete="one-time-code"
+                  placeholder="Code from your approving admin"
+                  className={inputClassName}
+                />
+              </span>
+              <span className="text-xs leading-5 text-muted-foreground">
+                Accounts become available only after an admin approves the request.
+              </span>
+            </label>
+          </>
         )}
 
         <label className="block space-y-2">
@@ -131,12 +153,12 @@ export function AuthForm({ callbackURL: requestedCallbackURL, mode }: AuthFormPr
       </Button>
 
       <p className="text-center text-sm text-muted-foreground">
-        {isSignUp ? "Already have a workspace?" : "New to DriveBox?"}{" "}
+        {isSignUp ? "Already have a workspace?" : "Have an approved activation code?"}{" "}
         <Link
           className="font-semibold text-primary underline-offset-4 hover:underline"
           to={isSignUp ? "/sign-in" : "/sign-up"}
         >
-          {isSignUp ? "Sign in" : "Create an account"}
+          {isSignUp ? "Sign in" : "Activate account"}
         </Link>
       </p>
     </form>

@@ -1,6 +1,5 @@
 import {
-  ArrowDownAZ,
-  ArrowUpAZ,
+  ArrowDownUp,
   ChevronRight,
   Download,
   Files,
@@ -10,13 +9,13 @@ import {
   Home,
   Search,
   Trash2,
-  X,
 } from "lucide-react";
 import { useRouter } from "@tanstack/react-router";
 import prettyBytes from "pretty-bytes";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { FileTypeIcon } from "@/components/FileTypeIcon";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   basename,
   countFilesUnderPath,
@@ -34,6 +33,9 @@ interface FileBrowserProps {
   folders: FolderType[];
   currentPath: string;
   onNavigate: (path: string) => void;
+  onSearchChange: (query: string) => void;
+  readOnly?: boolean;
+  searchQuery: string;
 }
 
 interface ToastState {
@@ -49,6 +51,7 @@ type PendingDelete =
 interface FileActionsProps {
   file: FileType;
   onDelete: (file: FileType) => void;
+  readOnly: boolean;
 }
 
 /** Formats a stored ISO timestamp for compact file metadata. */
@@ -61,7 +64,7 @@ function formatFileDate(timestamp: string): string {
 }
 
 /** Renders consistent download and deletion actions for file rows and cards. */
-function FileActions({ file, onDelete }: FileActionsProps): React.JSX.Element {
+function FileActions({ file, onDelete, readOnly }: FileActionsProps): React.JSX.Element {
   return (
     <div className="flex items-center justify-end gap-1">
       <Button asChild variant="ghost" size="icon" className="rounded-lg text-muted-foreground hover:text-primary">
@@ -69,16 +72,18 @@ function FileActions({ file, onDelete }: FileActionsProps): React.JSX.Element {
           <Download className="size-[17px]" />
         </a>
       </Button>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        className="rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-        aria-label={`Delete ${file.filename}`}
-        onClick={() => onDelete(file)}
-      >
-        <Trash2 className="size-[17px]" />
-      </Button>
+      {!readOnly && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+          aria-label={`Delete ${file.filename}`}
+          onClick={() => onDelete(file)}
+        >
+          <Trash2 className="size-[17px]" />
+        </Button>
+      )}
     </div>
   );
 }
@@ -136,10 +141,11 @@ interface FolderCardProps {
   fileCount: number;
   onNavigate: (path: string) => void;
   onDelete: (path: string, name: string, fileCount: number) => void;
+  readOnly: boolean;
 }
 
 /** Renders one double-clickable folder chip with a hover delete affordance. */
-function FolderCard({ name, path, fileCount, onNavigate, onDelete }: FolderCardProps): React.JSX.Element {
+function FolderCard({ name, path, fileCount, onNavigate, onDelete, readOnly }: FolderCardProps): React.JSX.Element {
   return (
     <div className="group flex items-center gap-1 rounded-xl border border-border/70 bg-background/50 p-1.5 pr-1 transition hover:border-primary/35 hover:bg-primary/[0.04]">
       <button
@@ -159,38 +165,30 @@ function FolderCard({ name, path, fileCount, onNavigate, onDelete }: FolderCardP
           </span>
         </span>
       </button>
-      <Button
+      {!readOnly && <Button
         type="button"
         variant="ghost"
         size="icon"
-        className="size-9 shrink-0 rounded-lg text-muted-foreground opacity-0 transition hover:bg-destructive/10 hover:text-destructive focus-visible:opacity-100 group-hover:opacity-100"
+        className="size-9 shrink-0 rounded-lg text-muted-foreground opacity-100 transition hover:bg-destructive/10 hover:text-destructive sm:opacity-0 sm:focus-visible:opacity-100 sm:group-hover:opacity-100"
         aria-label={`Delete folder ${name}`}
         onClick={() => onDelete(path, name, fileCount)}
       >
         <Trash2 className="size-4" />
-      </Button>
+      </Button>}
     </div>
   );
 }
 
 /** Renders the searchable folder-and-file browser with Drive-style navigation. */
-export default function FileBrowser({ files, folders, currentPath, onNavigate }: FileBrowserProps): React.JSX.Element {
+export default function FileBrowser({ files, folders, currentPath, onNavigate, onSearchChange, readOnly = false, searchQuery }: FileBrowserProps): React.JSX.Element {
   const router = useRouter();
-  const deleteDialogRef = useRef<HTMLDialogElement>(null);
-  const newFolderDialogRef = useRef<HTMLDialogElement>(null);
   const [deletedIds, setDeletedIds] = useState<Set<string>>(() => new Set());
-  const [query, setQuery] = useState("");
   const [sort, setSort] = useState<FileSortOrder>("desc");
   const [pendingDelete, setPendingDelete] = useState<PendingDelete>(null);
   const [newFolderName, setNewFolderName] = useState("");
+  const [newFolderOpen, setNewFolderOpen] = useState(false);
   const [isWorking, setIsWorking] = useState(false);
   const [toast, setToast] = useState<ToastState | null>(null);
-
-  useEffect(() => {
-    if (pendingDelete && !deleteDialogRef.current?.open) {
-      deleteDialogRef.current?.showModal();
-    }
-  }, [pendingDelete]);
 
   useEffect(() => {
     if (!toast) return;
@@ -208,10 +206,10 @@ export default function FileBrowser({ files, folders, currentPath, onNavigate }:
     [availableFiles, folders],
   );
 
-  const isSearching = query.trim().length > 0;
+  const isSearching = searchQuery.trim().length > 0;
   const searchResults = useMemo(
-    () => (isSearching ? filterAndSortFiles(availableFiles, query, sort) : []),
-    [availableFiles, isSearching, query, sort],
+    () => (isSearching ? filterAndSortFiles(availableFiles, searchQuery, sort) : []),
+    [availableFiles, isSearching, searchQuery, sort],
   );
 
   const listing = useMemo(
@@ -241,19 +239,18 @@ export default function FileBrowser({ files, folders, currentPath, onNavigate }:
 
   /** Closes the confirmation and clears its selection. */
   function closeDeleteDialog(): void {
-    deleteDialogRef.current?.close();
     setPendingDelete(null);
   }
 
   /** Opens the create-folder modal with a blank name. */
   function openNewFolderDialog(): void {
     setNewFolderName("");
-    newFolderDialogRef.current?.showModal();
+    setNewFolderOpen(true);
   }
 
   /** Closes the create-folder modal without saving. */
   function closeNewFolderDialog(): void {
-    newFolderDialogRef.current?.close();
+    setNewFolderOpen(false);
     setNewFolderName("");
   }
 
@@ -334,27 +331,7 @@ export default function FileBrowser({ files, folders, currentPath, onNavigate }:
 
         <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center">
           <h2 id="files-heading" className="sr-only">Workspace files</h2>
-          <label className="relative min-w-0 flex-1">
-            <span className="sr-only">Search all files</span>
-            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <input
-              type="search"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search all folders…"
-              className="h-10 w-full rounded-xl border bg-background/70 pl-9 pr-9 text-sm outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10"
-            />
-            {query && (
-              <button
-                type="button"
-                onClick={() => setQuery("")}
-                aria-label="Clear search"
-                className="absolute right-2 top-1/2 grid size-6 -translate-y-1/2 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
-              >
-                <X className="size-3.5" />
-              </button>
-            )}
-          </label>
+          <div className="min-w-0 flex-1 text-sm text-muted-foreground">{isSearching ? <>Results for <strong className="text-foreground">“{searchQuery}”</strong></> : "Use the search bar above to search this drive."}</div>
           <div className="flex gap-2">
             <Button
               type="button"
@@ -363,13 +340,15 @@ export default function FileBrowser({ files, folders, currentPath, onNavigate }:
               className="flex-1 justify-center sm:flex-none"
               aria-label={`Sort by ${sort === "desc" ? "oldest" : "newest"} first`}
             >
-              {sort === "desc" ? <ArrowDownAZ className="mr-2 size-4" /> : <ArrowUpAZ className="mr-2 size-4" />}
+              <ArrowDownUp className="mr-2 size-4" />
               {sort === "desc" ? "Newest" : "Oldest"}
             </Button>
-            <Button type="button" onClick={openNewFolderDialog} className="flex-1 justify-center sm:flex-none">
-              <FolderPlus className="mr-2 size-4" />
-              New folder
-            </Button>
+            {!readOnly && (
+              <Button type="button" onClick={openNewFolderDialog} className="flex-1 justify-center sm:flex-none">
+                <FolderPlus className="mr-2 size-4" />
+                New folder
+              </Button>
+            )}
           </div>
         </div>
 
@@ -383,23 +362,23 @@ export default function FileBrowser({ files, folders, currentPath, onNavigate }:
       {itemCount > 0 && (
         <>
           {visibleFolders.length > 0 && (
-            <div
-              role="list"
+            <ul
               aria-label="Folders"
               className="grid gap-2 border-b border-border/70 p-4 sm:grid-cols-2 xl:grid-cols-3 sm:p-5"
             >
               {visibleFolders.map((folder) => (
-                <div key={folder.path} role="listitem">
+                <li key={folder.path}>
                   <FolderCard
                     name={folder.name}
                     path={folder.path}
                     fileCount={countFilesUnderPath(availableFiles, folder.path)}
                     onNavigate={onNavigate}
                     onDelete={requestFolderDelete}
+                    readOnly={readOnly}
                   />
-                </div>
+                </li>
               ))}
-            </div>
+            </ul>
           )}
 
           {visibleFiles.length > 0 && (
@@ -436,7 +415,7 @@ export default function FileBrowser({ files, folders, currentPath, onNavigate }:
                           <time dateTime={file.timestamp}>{formatFileDate(file.timestamp)}</time>
                         </td>
                         <td className="whitespace-nowrap px-4 py-4 font-medium">{prettyBytes(file.size)}</td>
-                        <td className="px-5 py-4"><FileActions file={file} onDelete={requestFileDelete} /></td>
+                        <td className="px-5 py-4"><FileActions file={file} onDelete={requestFileDelete} readOnly={readOnly} /></td>
                       </tr>
                     ))}
                   </tbody>
@@ -459,7 +438,7 @@ export default function FileBrowser({ files, folders, currentPath, onNavigate }:
                           {prettyBytes(file.size)}
                         </p>
                       </div>
-                      <FileActions file={file} onDelete={requestFileDelete} />
+                      <FileActions file={file} onDelete={requestFileDelete} readOnly={readOnly} />
                     </div>
                   </li>
                 ))}
@@ -479,33 +458,25 @@ export default function FileBrowser({ files, folders, currentPath, onNavigate }:
           </h3>
           <p className="mt-1 max-w-sm text-sm leading-6 text-muted-foreground">
             {isSearching
-              ? `Nothing matches “${query}”. Try another search.`
+              ? `Nothing matches “${searchQuery}”. Try another search.`
               : isEmptyWorkspace
-                ? "Upload your first files above, or create a folder to get organized."
-                : "Drop files into the upload area and they will land in this folder."}
+                ? readOnly ? "This child drive does not contain files yet." : "Upload your first files above, or create a folder to get organized."
+                : readOnly ? "This folder is empty." : "Drop files into the upload area and they will land in this folder."}
           </p>
           {isSearching && (
-            <Button type="button" variant="outline" size="sm" className="mt-4" onClick={() => setQuery("")}>
+            <Button type="button" variant="outline" size="sm" className="mt-4" onClick={() => onSearchChange("")}>
               Clear search
             </Button>
           )}
         </div>
       )}
 
-      <dialog
-        ref={newFolderDialogRef}
-        onClose={closeNewFolderDialog}
-        aria-labelledby="new-folder-dialog-title"
-        className="w-[calc(100%-2rem)] max-w-md rounded-2xl border bg-card p-0 text-card-foreground shadow-2xl backdrop:bg-slate-950/60 backdrop:backdrop-blur-sm"
-      >
-        <div className="p-6">
+      {!readOnly && <Dialog open={newFolderOpen} onOpenChange={(open) => { setNewFolderOpen(open); if (!open) setNewFolderName(""); }}>
+        <DialogContent className="max-w-md">
           <span className="grid size-11 place-items-center rounded-xl bg-primary/10 text-primary">
             <FolderPlus className="size-5" />
           </span>
-          <h3 id="new-folder-dialog-title" className="mt-4 text-xl font-bold tracking-tight">Create new folder</h3>
-          <p className="mt-2 text-sm text-muted-foreground">
-            {currentPath ? `A folder will be created inside “${basename(currentPath)}”.` : "A folder will be created in My Files."}
-          </p>
+          <DialogHeader><DialogTitle>Create new folder</DialogTitle><DialogDescription>{currentPath ? `A folder will be created inside “${basename(currentPath)}”.` : "A folder will be created in My Files."}</DialogDescription></DialogHeader>
           <input
             type="text"
             value={newFolderName}
@@ -520,35 +491,25 @@ export default function FileBrowser({ files, folders, currentPath, onNavigate }:
             aria-label="Folder name"
             maxLength={255}
             autoFocus
-            className="mt-4 h-10 w-full rounded-xl border bg-background/70 px-3 text-sm outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10"
+            className="h-10 w-full rounded-xl border bg-background/70 px-3 text-sm outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10"
           />
-          <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <DialogFooter>
             <Button type="button" variant="outline" onClick={closeNewFolderDialog} disabled={isWorking}>
               Cancel
             </Button>
             <Button type="button" onClick={() => void confirmCreateFolder()} disabled={isWorking || !newFolderName.trim()}>
               {isWorking ? "Creating…" : "Create folder"}
             </Button>
-          </div>
-        </div>
-      </dialog>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>}
 
-      <dialog
-        ref={deleteDialogRef}
-        onClose={() => setPendingDelete(null)}
-        onCancel={() => setPendingDelete(null)}
-        aria-labelledby="delete-dialog-title"
-        aria-describedby="delete-dialog-description"
-        className="w-[calc(100%-2rem)] max-w-md rounded-2xl border bg-card p-0 text-card-foreground shadow-2xl backdrop:bg-slate-950/60 backdrop:backdrop-blur-sm"
-      >
-        <div className="p-6">
+      {!readOnly && <Dialog open={Boolean(pendingDelete)} onOpenChange={(open) => { if (!open) setPendingDelete(null); }}>
+        <DialogContent className="max-w-md">
           <span className="grid size-11 place-items-center rounded-xl bg-destructive/10 text-destructive">
             <Trash2 className="size-5" />
           </span>
-          <h3 id="delete-dialog-title" className="mt-4 text-xl font-bold tracking-tight">
-            {pendingDelete?.kind === "folder" ? "Delete this folder?" : "Delete this file?"}
-          </h3>
-          <p id="delete-dialog-description" className="mt-2 text-sm leading-6 text-muted-foreground">
+          <DialogHeader><DialogTitle>{pendingDelete?.kind === "folder" ? "Delete this folder?" : "Delete this file?"}</DialogTitle><DialogDescription asChild><div>
             {pendingDelete?.kind === "folder" ? (
               <>
                 <span className="font-semibold text-foreground">{pendingDelete.name}</span> and everything inside it
@@ -566,17 +527,17 @@ export default function FileBrowser({ files, folders, currentPath, onNavigate }:
                 from your private storage. This cannot be undone.
               </>
             )}
-          </p>
-          <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          </div></DialogDescription></DialogHeader>
+          <DialogFooter>
             <Button type="button" variant="outline" onClick={closeDeleteDialog} disabled={isWorking} autoFocus>
               Cancel
             </Button>
             <Button type="button" variant="destructive" onClick={() => void confirmDelete()} disabled={isWorking}>
               {isWorking ? "Deleting…" : "Delete permanently"}
             </Button>
-          </div>
-        </div>
-      </dialog>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>}
 
       {toast && (
         <div

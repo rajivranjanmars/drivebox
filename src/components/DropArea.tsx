@@ -227,7 +227,7 @@ export default function DropArea({ destinationPath = "" }: DropAreaProps = {}): 
             <div
               {...getRootProps()}
               className={cn(
-                "group relative flex min-h-60 flex-col items-center justify-center overflow-hidden rounded-xl border border-dashed px-5 py-8 text-center transition-all duration-300",
+                "group relative flex min-h-32 flex-col items-center justify-center overflow-hidden rounded-xl border border-dashed px-5 py-5 text-center transition-all duration-300 sm:flex-row sm:justify-start sm:text-left",
                 isDragActive
                   ? "scale-[0.995] border-primary bg-primary/[0.09]"
                   : "border-primary/25 bg-gradient-to-br from-primary/[0.045] via-transparent to-violet-500/[0.045] hover:border-primary/45 hover:bg-primary/[0.06]",
@@ -238,7 +238,7 @@ export default function DropArea({ destinationPath = "" }: DropAreaProps = {}): 
               <div aria-hidden="true" className="absolute inset-0 grid-fade opacity-30" />
 
               <span className={cn(
-                "relative mb-4 grid size-14 place-items-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-500 text-white shadow-lg shadow-indigo-500/25 transition-transform duration-300 group-hover:-translate-y-1",
+                "relative mb-3 grid size-12 shrink-0 place-items-center rounded-2xl bg-blue-600 text-white shadow-md transition-transform duration-300 group-hover:-translate-y-1 sm:mb-0 sm:mr-4",
                 isDragActive && "-translate-y-1 scale-105",
               )}>
                 {progress ? <LoaderCircle className="size-6 animate-spin" /> : <CloudUpload className="size-6" />}
@@ -281,7 +281,7 @@ export default function DropArea({ destinationPath = "" }: DropAreaProps = {}): 
                         : null}
                       Resumable chunk uploads · Folder structure preserved · Up to {prettyBytes(MAX_FILE_SIZE, { binary: true })}
                     </p>
-                    <div className="relative mt-5 flex flex-wrap justify-center gap-2">
+                    <div className="relative mt-4 flex flex-wrap justify-center gap-2 sm:justify-start">
                       <Button type="button" onClick={open}>
                         <FileUp className="mr-2 size-4" /> Choose files
                       </Button>
