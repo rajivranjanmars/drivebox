@@ -16,7 +16,7 @@ export default defineConfig({
       },
       miniflare: {
         // Keep tests on the same newest workerd date supported by the Cloudflare Vite toolchain.
-        compatibilityDate: "2026-08-08",
+        compatibilityDate: "2026-08-18",
         bindings: {
           TEST_MIGRATIONS: await readD1Migrations(path.join(import.meta.dirname, "migrations")),
         },

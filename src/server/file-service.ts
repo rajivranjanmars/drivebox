@@ -143,7 +143,6 @@ async function abortQuietly(storage: ObjectStorage, key: string, uploadId: strin
   } catch (error) {
     console.error(JSON.stringify({
       message: "multipart upload cleanup failed",
-      objectKey: key,
       error: error instanceof Error ? error.message : String(error),
     }));
   }
@@ -155,7 +154,6 @@ async function deleteObjectQuietly(storage: ObjectStorage, objectKey: string): P
   } catch (error) {
     console.error(JSON.stringify({
       message: "object upload cleanup failed",
-      objectKey,
       error: error instanceof Error ? error.message : String(error),
     }));
   }
@@ -407,15 +405,18 @@ export function makeFileService(database: Database, storage: ObjectStorage): Fil
     deleteFolder: (userId, rawPath) => Effect.gen(function* () {
       const path = normalizeFolderPath(rawPath);
       if (!path) return yield* Effect.fail(new FileNotFoundError());
-      const prefix = `${path}/`;
 
-      const [descendantFiles, descendantUploads] = yield* Effect.tryPromise({
+      const [existingFolder, descendantFiles, descendantUploads] = yield* Effect.tryPromise({
         try: () => Promise.all([
-          listOwnedFilesUnderPath(database, userId, prefix),
-          listUploadSessionsUnderPath(database, userId, prefix),
+          findOwnedFolder(database, userId, path),
+          listOwnedFilesUnderPath(database, userId, path),
+          listUploadSessionsUnderPath(database, userId, path),
         ]),
         catch: (cause) => new FileStoreError({ operation: "delete-folder", cause }),
       });
+      if (!existingFolder && descendantFiles.length === 0) {
+        return yield* Effect.fail(new FileNotFoundError());
+      }
 
       for (const upload of descendantUploads) {
         if (upload.status === "active") {
@@ -443,15 +444,6 @@ export function makeFileService(database: Database, storage: ObjectStorage): Fil
         catch: (cause) => new FileStoreError({ operation: "delete-folder", cause }),
       });
 
-      const removedFolder = yield* Effect.tryPromise({
-        try: () => findOwnedFolder(database, userId, path),
-        catch: (cause) => new FileStoreError({ operation: "delete-folder", cause }),
-      });
-      // A visible folder must be either an explicit row or backed by stored
-      // files; otherwise it never existed for this user.
-      if (!removedFolder && descendantFiles.length === 0) {
-        return yield* Effect.fail(new FileNotFoundError());
-      }
       return { deletedFiles: descendantFiles.length };
     }),
   };

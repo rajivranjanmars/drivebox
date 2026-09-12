@@ -17,11 +17,14 @@ import {
 import { filterAndSortFiles, getFileCategory } from "@/lib/file-presentation";
 import {
   deleteUserFile,
+  deleteUserFolder,
   completeUserUpload,
+  createUserFolder,
   downloadUserFile,
   fileServiceLayer,
   getUserUpload,
   listUserFiles,
+  listUserFolders,
   startUserUpload,
   uploadUserPart,
 } from "@/server/file-service";
@@ -233,5 +236,33 @@ describe("D1 metadata and object-storage workflows", (): void => {
     expect(await new Response(replacementDownload.object.body).text()).toBe("replacement guide");
 
     await run(deleteUserFile(ownerId, replaced.fileId));
+  });
+
+  it("deletes an explicit folder and its descendant files without a doubled path prefix", async (): Promise<void> => {
+    const database = createDatabase(env.DB);
+    const layer = fileServiceLayer(database, makeMemoryObjectStorage());
+    const run = <A, E>(program: Effect.Effect<A, E, import("@/server/file-service").FileService>) =>
+      Effect.runPromise(program.pipe(Effect.provide(layer)));
+    await run(createUserFolder(ownerId, "Projects"));
+    const body = new TextEncoder().encode("folder child");
+    const upload = await run(startUserUpload(ownerId, {
+      filename: "child.txt",
+      relativePath: "Projects/child.txt",
+      mimeType: "text/plain",
+      size: body.byteLength,
+      fingerprint: "folder-delete-child-v1",
+    }));
+    await run(uploadUserPart({
+      userId: ownerId,
+      uploadId: upload.uploadId,
+      partNumber: 1,
+      size: body.byteLength,
+      body: new Blob([body]).stream(),
+    }));
+    await run(completeUserUpload(ownerId, upload.uploadId));
+
+    await expect(run(deleteUserFolder(ownerId, "Projects"))).resolves.toEqual({ deletedFiles: 1 });
+    expect(await run(listUserFiles(ownerId))).toEqual([]);
+    expect(await run(listUserFolders(ownerId))).toEqual([]);
   });
 });

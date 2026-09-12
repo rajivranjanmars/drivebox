@@ -1,15 +1,20 @@
 import { drizzleAdapter } from "@better-auth/drizzle-adapter";
 import { betterAuth, type Auth, type BetterAuthOptions } from "better-auth";
+import { APIError } from "better-auth/api";
 import { tanstackStartCookies } from "better-auth/tanstack-start";
 import { env } from "cloudflare:workers";
+import { eq } from "drizzle-orm";
 import type { Database } from "@/db";
 import { getDatabase } from "@/db";
-import { schema } from "@/db/schema";
+import { schema, user } from "@/db/schema";
+import { activateEnrollment, validateEnrollment } from "@/server/governance";
 
 export interface AuthRuntimeOptions {
   database: Database;
   secret: string;
   baseURL: string;
+  bootstrapSecret?: string;
+  bootstrapEmail?: string;
 }
 
 /** Creates a Better Auth instance scoped to one request and one D1 client. */
@@ -25,6 +30,44 @@ export function createAuth(options: AuthRuntimeOptions): Auth {
     emailAndPassword: {
       enabled: true,
       minPasswordLength: 8,
+    },
+    databaseHooks: {
+      user: {
+        create: {
+          before: async (candidate, context) => {
+            const token = context?.headers?.get("x-drivebox-enrollment")
+              ?? context?.request?.headers.get("x-drivebox-enrollment")
+              ?? "";
+            try {
+              const enrollment = await validateEnrollment(options.database, candidate.email, token, options.bootstrapSecret, options.bootstrapEmail);
+              if (enrollment.kind === "request") return { data: { ...candidate, name: enrollment.requestedName } };
+            } catch {
+              throw new APIError("FORBIDDEN", { message: "An approved activation code is required" });
+            }
+          },
+        },
+      },
+      account: {
+        create: {
+          after: async (createdAccount, context) => {
+            if (createdAccount.providerId !== "credential") return;
+            const token = context?.headers?.get("x-drivebox-enrollment")
+              ?? context?.request?.headers.get("x-drivebox-enrollment")
+              ?? "";
+            const [createdUser] = await options.database.select({ id: user.id, email: user.email })
+              .from(user)
+              .where(eq(user.id, createdAccount.userId))
+              .limit(1);
+            if (!createdUser) throw new APIError("UNPROCESSABLE_ENTITY", { message: "Account activation failed" });
+            try {
+              await activateEnrollment(options.database, createdUser, token, options.bootstrapSecret, options.bootstrapEmail);
+            } catch (cause) {
+              await options.database.delete(user).where(eq(user.id, createdAccount.userId));
+              throw cause;
+            }
+          },
+        },
+      },
     },
     rateLimit: {
       enabled: true,
@@ -65,5 +108,7 @@ export function getAuth(): Auth {
     database: getDatabase(),
     secret,
     baseURL: parsedBaseURL.origin,
+    bootstrapSecret: env.SUPERADMIN_BOOTSTRAP_TOKEN,
+    bootstrapEmail: env.SUPERADMIN_BOOTSTRAP_EMAIL,
   });
 }
