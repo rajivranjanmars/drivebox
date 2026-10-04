@@ -93,3 +93,7 @@ bun run deploy
 
 Review `BETTER_AUTH_URL`, `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, and
 `S3_ADDRESSING_STYLE` in `wrangler.jsonc` before deploying.
+
+## Author
+
+[rajivranjanmars](https://rajivranjana.in)
