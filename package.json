@@ -40,7 +40,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "drizzle-orm": "^0.45.2",
-    "effect": "^4.0.0",
+    "effect": "^4.0.1",
     "lucide-react": "^1.41.0",
     "pretty-bytes": "^7.1.3",
     "react": "^19.2.8",
